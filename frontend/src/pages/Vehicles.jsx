@@ -13,6 +13,9 @@ import {
 import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 
 const B = '#1B6BB5', G = '#059669', R = '#DC2626', A = '#D97706', NAVY = '#0F172A'
+/* Brand accent — matches the sidebar's console amber, used only for primary actions
+   (Add Vehicle CTA, modal header strip) so it stays distinct from status colors above. */
+const AMBER = '#F2A93B', AMBER_DARK = '#1A1306', AMBER_TINT = '#FEF3E2'
 const BORDER   = '1px solid #E2E8F0'
 const TYPES    = ['Sedan','SUV','Truck','Van','Motorcycle','Bus','Other']
 const PROTOCOLS= ['GT06','TK103','H02','GT02','Other']
@@ -24,17 +27,17 @@ const sBg    = s => s==='moving'?'#D1FAE5':s==='stopped'?'#FEF3C7':'#F1F5F9'
 const sBorder= s => s==='moving'?'#A7F3D0':s==='stopped'?'#FDE68A':'#E2E8F0'
 
 /* ── Stat card (clickable filter) ─────────────────────── */
-const StatCard = ({ label, value, icon:Icon, color, bg, active, onClick }) => (
+const StatCard = ({ label, value, icon:Icon, color, bg, active, onClick, onColor='white' }) => (
   <div onClick={onClick}
     style={{ background: active?color:'white', borderRadius:14, padding:'18px 20px', border: active?`2px solid ${color}`:BORDER, display:'flex', alignItems:'center', gap:14, cursor:onClick?'pointer':'default', transition:'all .2s', boxShadow: active?`0 4px 16px ${color}33`:'0 1px 3px rgba(0,0,0,.04)' }}
     onMouseEnter={e=>{ if(onClick&&!active) e.currentTarget.style.borderColor=color }}
     onMouseLeave={e=>{ if(onClick&&!active) e.currentTarget.style.borderColor='#E2E8F0' }}>
-    <div style={{ width:44, height:44, borderRadius:12, background:active?'rgba(255,255,255,.22)':bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-      <Icon size={20} color={active?'white':color}/>
+    <div style={{ width:44, height:44, borderRadius:12, background:active?(onColor==='white'?'rgba(255,255,255,.22)':'rgba(0,0,0,.08)'):bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+      <Icon size={20} color={active?onColor:color}/>
     </div>
     <div>
-      <div style={{ fontSize:11, fontWeight:600, color:active?'rgba(255,255,255,.7)':'#94A3B8', textTransform:'uppercase', letterSpacing:.5, marginBottom:3 }}>{label}</div>
-      <div style={{ fontSize:24, fontWeight:800, color:active?'white':NAVY }}>{value}</div>
+      <div style={{ fontSize:11, fontWeight:600, color:active?(onColor==='white'?'rgba(255,255,255,.7)':'rgba(26,19,6,.6)'):'#94A3B8', textTransform:'uppercase', letterSpacing:.5, marginBottom:3 }}>{label}</div>
+      <div style={{ fontSize:24, fontWeight:800, color:active?onColor:NAVY }}>{value}</div>
     </div>
   </div>
 )
@@ -296,7 +299,7 @@ export default function Vehicles({ onNavigate }) {
             </button>
           )}
           <button onClick={openAdd}
-            style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 22px', background:`linear-gradient(135deg,#0F3460,${B})`, color:'white', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:`0 4px 16px ${B}44` }}>
+            style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 22px', background:AMBER, color:AMBER_DARK, border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:`0 4px 16px rgba(242,169,59,.4)` }}>
             <Plus size={16}/> Add Vehicle
           </button>
         </div>
@@ -310,7 +313,7 @@ export default function Vehicles({ onNavigate }) {
             <Skel w={44} h={44} r={12}/><div style={{ flex:1 }}><Skel h={11} r={5} style={{ marginBottom:8 }}/><Skel w="40%" h={24} r={6}/></div>
           </div>
         )) : (<>
-          <StatCard label="All Vehicles" value={stats.total}   icon={Car}      color={B}       bg="#EFF6FF" active={filter==='all'}     onClick={()=>setFilter('all')}/>
+          <StatCard label="All Vehicles" value={stats.total}   icon={Car}      color={AMBER}   bg={AMBER_TINT} active={filter==='all'}     onClick={()=>setFilter('all')} onColor={AMBER_DARK}/>
           <StatCard label="Moving"       value={stats.moving}  icon={Activity} color={G}       bg="#D1FAE5" active={filter==='moving'}  onClick={()=>setFilter('moving')}/>
           <StatCard label="Stopped"      value={stats.stopped} icon={Clock}    color={A}       bg="#FEF3C7" active={filter==='stopped'} onClick={()=>setFilter('stopped')}/>
           <StatCard label="Offline"      value={stats.offline} icon={WifiOff}  color="#94A3B8" bg="#F1F5F9" active={filter==='offline'} onClick={()=>setFilter('offline')}/>
@@ -467,7 +470,7 @@ export default function Vehicles({ onNavigate }) {
           onClick={e=>{ if(e.target===e.currentTarget) close() }}>
           <div style={{ background:'white', borderRadius:20, width:'100%', maxWidth:540, display:'flex', flexDirection:'column', position:'relative', overflow:'hidden', maxHeight:'90vh', animation:'kvh-pop .18s cubic-bezier(.2,.9,.3,1.2)' }}>
             <SavingOverlay show={saving}/>
-            <div style={{ height:4, background:`linear-gradient(90deg,#0F3460,${B})` }}/>
+            <div style={{ height:4, background:AMBER }}/>
 
             <div style={{ padding:'22px 26px 18px', borderBottom:BORDER, display:'flex', justifyContent:'space-between', alignItems:'center', flexShrink:0 }}>
               <div>
@@ -537,8 +540,8 @@ export default function Vehicles({ onNavigate }) {
             <div style={{ padding:'16px 26px', borderTop:BORDER, display:'flex', gap:10, justifyContent:'flex-end', flexShrink:0 }}>
               <button onClick={close} style={{ padding:'10px 20px', background:'#F8FAFC', border:BORDER, borderRadius:10, fontSize:14, fontWeight:600, cursor:'pointer', color:'#64748B' }}>Cancel</button>
               <button onClick={save} disabled={saving||!form.name.trim()||!form.plate.trim()}
-                style={{ padding:'10px 24px', background:(!form.name.trim()||!form.plate.trim())?'#E2E8F0':`linear-gradient(135deg,#0F3460,${B})`, color:(!form.name.trim()||!form.plate.trim())?'#94A3B8':'white', border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:(!form.name.trim()||!form.plate.trim())?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:8 }}>
-                {saving?<><Spinner size={14} color="white"/>Saving…</>:<><Save size={14}/>{modal==='add'?'Add Vehicle':'Save Changes'}</>}
+                style={{ padding:'10px 24px', background:(!form.name.trim()||!form.plate.trim())?'#E2E8F0':AMBER, color:(!form.name.trim()||!form.plate.trim())?'#94A3B8':AMBER_DARK, border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:(!form.name.trim()||!form.plate.trim())?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:8 }}>
+                {saving?<><Spinner size={14} color={AMBER_DARK}/>Saving…</>:<><Save size={14}/>{modal==='add'?'Add Vehicle':'Save Changes'}</>}
               </button>
             </div>
           </div>

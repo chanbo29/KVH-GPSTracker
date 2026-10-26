@@ -13,6 +13,9 @@ import {
 } from '../components/Loading.jsx'
 import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 
+/* Brand accent — matches the sidebar's console amber, used only for primary actions
+   (Add Driver CTA, modal Save/Edit buttons) so it stays distinct from status colors. */
+const AMBER = '#F2A93B', AMBER_DARK = '#1A1306', AMBER_TINT = '#FEF3E2'
 
 /* ── Avatar with initials ─────────────────────────────────── */
 const AVATAR_COLORS = [
@@ -284,7 +287,7 @@ export default function Drivers() {
           <p style={{ margin:'4px 0 0', color:C.faint, fontSize:14 }}>{loading?'Loading…':`${stats.total} drivers registered`}</p>
         </div>
         <button onClick={openAdd}
-          style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 22px', background:`linear-gradient(135deg,#0F3460,${C.accent})`, color:'white', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:`0 4px 16px ${C.accent}44` }}>
+          style={{ display:'flex', alignItems:'center', gap:8, padding:'12px 22px', background:AMBER, color:AMBER_DARK, border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 16px rgba(242,169,59,.4)' }}>
           <Plus size={16}/> Add Driver
         </button>
       </div>
@@ -301,7 +304,7 @@ export default function Drivers() {
           ))
         ) : (
           <>
-            <StatCard label="Total Drivers"   value={stats.total}    icon={Users}         color={C.accent}    bg={C.accentL}/>
+            <StatCard label="Total Drivers"   value={stats.total}    icon={Users}         color={AMBER}       bg={AMBER_TINT}/>
             <StatCard label="Active"          value={stats.active}   icon={CheckCircle}   color={C.green} bg={C.greenL}/>
             <StatCard label="Inactive"        value={stats.inactive} icon={XCircle}       color={C.faint} bg={C.bg}/>
             <StatCard label="With Vehicle"    value={stats.assigned} icon={Car}           color={C.amber} bg={C.amberL}/>
@@ -350,7 +353,7 @@ export default function Drivers() {
             </div>
             {!search && (
               <button onClick={openAdd}
-                style={{ padding:'10px 22px', background:C.accent, color:'white', border:'none', borderRadius:10, fontSize:13.5, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:8 }}>
+                style={{ padding:'10px 22px', background:AMBER, color:AMBER_DARK, border:'none', borderRadius:10, fontSize:13.5, fontWeight:600, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:8 }}>
                 <Plus size={14}/> Add Driver
               </button>
             )}
@@ -458,7 +461,7 @@ export default function Drivers() {
                   Close
                 </button>
                 <button onClick={()=>{ closeModal(); openEdit(viewing) }}
-                  style={{ padding:'9px 18px', background:`linear-gradient(135deg,#0F3460,${C.accent})`, color:'white', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:7 }}>
+                  style={{ padding:'9px 18px', background:AMBER, color:AMBER_DARK, border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:7 }}>
                   <Edit size={13}/> Edit
                 </button>
               </div>
@@ -525,8 +528,8 @@ export default function Drivers() {
                 Cancel
               </button>
               <button onClick={save} disabled={saving||!form.name.trim()}
-                style={{ padding:'10px 24px', background:!form.name.trim()?C.border:`linear-gradient(135deg,#0F3460,${C.accent})`, color:!form.name.trim()?C.faint:'white', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:!form.name.trim()?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:8 }}>
-                {saving ? <><Spinner size={14} color="white"/> Saving…</> : <><Save size={14}/>Add Driver</>}
+                style={{ padding:'10px 24px', background:!form.name.trim()?C.border:AMBER, color:!form.name.trim()?C.faint:AMBER_DARK, border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:!form.name.trim()?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:8 }}>
+                {saving ? <><Spinner size={14} color={AMBER_DARK}/> Saving…</> : <><Save size={14}/>Add Driver</>}
               </button>
             </div>
           </div>
@@ -609,8 +612,8 @@ export default function Drivers() {
                 Cancel
               </button>
               <button onClick={save} disabled={saving||!form.name.trim()}
-                style={{ padding:'10px 24px', background:!form.name.trim()?C.border:`linear-gradient(135deg,#0F3460,${C.accent})`, color:!form.name.trim()?C.faint:'white', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:!form.name.trim()?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:8 }}>
-                {saving ? <><Spinner size={14} color="white"/> Saving…</> : <><Save size={14}/>Save Changes</>}
+                style={{ padding:'10px 24px', background:!form.name.trim()?C.border:AMBER, color:!form.name.trim()?C.faint:AMBER_DARK, border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:!form.name.trim()?'not-allowed':'pointer', display:'flex', alignItems:'center', gap:8 }}>
+                {saving ? <><Spinner size={14} color={AMBER_DARK}/> Saving…</> : <><Save size={14}/>Save Changes</>}
               </button>
             </div>
           </div>

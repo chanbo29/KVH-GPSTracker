@@ -21,7 +21,7 @@ const ONLINE         = '#34D399'
 /* NAV array changes or gains new items later. Section labels are translated via t(). */
 const SECTIONS = [
   { labelKey: 'sidebar.section.overview',   ids: ['dashboard', 'live'] },
-  { labelKey: 'sidebar.section.fleet',      ids: ['vehicles', 'drivers', 'devices', 'geofences'] },
+  { labelKey: 'sidebar.section.fleet',      ids: ['vehicles', 'devices', 'drivers', 'geofences'] },
   { labelKey: 'sidebar.section.operations', ids: ['history', 'alerts', 'reports', 'maintenance', 'fuel'] },
   { labelKey: 'sidebar.section.admin',      ids: ['users', 'settings', 'sms'] },
 ]

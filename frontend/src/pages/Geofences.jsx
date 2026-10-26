@@ -5,7 +5,7 @@ import { api }    from '../api/client.js'
 import { LoadingStyles, Spinner, LoadingBar, SkeletonRows, SavingOverlay } from '../components/Loading.jsx'
 import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 
-const B='#1B6BB5', G='#059669', R='#DC2626'
+const B='#F2A93B', BT='#1A1306', BTINT='#FEF3E2', G='#059669', R='#DC2626'
 const BLANK={name:'',type:'Circle',radius:500,enabled:true,lat:'',lng:''}
 const POLL_MS = 12000   // how often vehicle positions refresh, to keep "inside" status current
 
@@ -62,6 +62,7 @@ export default function Geofences() {
 
   const filtered = geofences.filter(g=>!search||g.name?.toLowerCase().includes(search.toLowerCase()))
   const fld=(k,v)=>setForm(f=>({...f,[k]:v}))
+  const activeCount = geofences.filter(g=>g.enabled).length
 
   // Which vehicles are currently inside each geofence — recomputed whenever either list changes
   const insideByGeofence = useMemo(() => {
@@ -71,6 +72,13 @@ export default function Geofences() {
     }
     return map
   }, [geofences, vehicles])
+
+  // Unique vehicles currently sitting inside any active zone, for the summary tile
+  const vehiclesInsideAny = useMemo(() => {
+    const seen = new Set()
+    Object.values(insideByGeofence).forEach(list => list.forEach(v => seen.add(v.imei || v.vehicle_id)))
+    return seen.size
+  }, [insideByGeofence])
 
   const save=async()=>{
     if(!form.name){ toast('Geofence name is required', 'warning'); return }
@@ -117,12 +125,28 @@ export default function Geofences() {
         <div style={{ display:'flex', gap:10 }}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search geofences..."
             style={{ padding:'9px 14px', border:'1px solid #E2E8F0', borderRadius:10, fontSize:14, outline:'none', width:220 }}/>
-          <button type="button" onClick={()=>setModal(true)} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 18px', background:B, color:'white', border:'none', borderRadius:10, fontSize:14, fontWeight:600, cursor:'pointer' }}>
+          <button type="button" onClick={()=>setModal(true)} style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 18px', background:B, color:BT, border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 2px 10px rgba(242,169,59,.35)' }}>
             <Plus size={16}/> Add Geofence
           </button>
         </div>
       </div>
       <LoadingBar show={loading}/>
+
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:14, marginBottom:20 }}>
+        {[
+          ['Total zones', geofences.length, BTINT, '#B9790A'],
+          ['Active now', activeCount, '#ECFDF5', G],
+          ['Vehicles inside a zone', vehiclesInsideAny, '#EFF6FF', '#2563EB'],
+        ].map(([label, val, bg, fg]) => (
+          <div key={label} style={{ background:'white', border:'1px solid #E2E8F0', borderRadius:14, padding:'16px 18px' }}>
+            <div style={{ color:'#64748B', fontSize:12.5, fontWeight:600, marginBottom:8 }}>{label}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background:fg, flexShrink:0 }}/>
+              <span style={{ fontSize:26, fontWeight:800, color:'#0F172A' }}>{val}</span>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div style={{ background:'white', borderRadius:14, border:'1px solid #E2E8F0', overflow:'hidden' }}>
         <table style={{ width:'100%', borderCollapse:'collapse' }}>
@@ -142,7 +166,7 @@ export default function Geofences() {
               <tr key={g.geofence_id} style={{ borderBottom:'1px solid #F1F5F9' }}>
                 <td style={{ padding:'14px 16px' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                    <div style={{ width:36, height:36, borderRadius:9, background:'#EFF6FF', display:'flex', alignItems:'center', justifyContent:'center' }}><Hexagon size={17} color={B}/></div>
+                    <div style={{ width:36, height:36, borderRadius:9, background:BTINT, display:'flex', alignItems:'center', justifyContent:'center' }}><Hexagon size={17} color="#B9790A"/></div>
                     <span style={{ fontWeight:700, color:'#0F172A' }}>{g.name}</span>
                   </div>
                 </td>
@@ -235,8 +259,8 @@ export default function Geofences() {
             <div style={{ padding:'16px 24px', borderTop:'1px solid #E2E8F0', display:'flex', gap:10, justifyContent:'flex-end' }}>
               <button type="button" onClick={()=>setModal(false)} style={{ padding:'10px 20px', background:'#F1F5F9', border:'1px solid #E2E8F0', borderRadius:10, fontSize:14, fontWeight:600, cursor:'pointer', color:'#64748B' }}>Cancel</button>
               <button type="button" onClick={save} disabled={saving||!form.name}
-                style={{ padding:'10px 24px', background:B, color:'white', border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:8, opacity:!form.name?.6:1 }}>
-                {saving?<><Spinner size={16} color="white"/>Saving...</>:<><Save size={15}/>Add Geofence</>}
+                style={{ padding:'10px 24px', background:B, color:BT, border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:8, opacity:!form.name?.6:1, boxShadow:'0 2px 10px rgba(242,169,59,.35)' }}>
+                {saving?<><Spinner size={16} color={BT}/>Saving...</>:<><Save size={15}/>Add Geofence</>}
               </button>
             </div>
           </div>
