@@ -7,12 +7,12 @@ import socket, threading, struct, requests, json
 from datetime import datetime
 
 HOST     = '0.0.0.0'
-# Reverted to 5023 — the tracker never acknowledged the SMS command pointing it
-# at port 443 (no "OK" reply, unlike every other SERVER command tried), so the
-# port-443 test never actually took effect on the device side. The real open
-# question is whether the SIM has a working mobile-data session at all, not
-# which port it's blocked on.
-PORT     = 5023
+# Back to 443 — confirmed via journalctl that the tracker DID silently accept
+# the SERVER,...,443,0# SMS command (no "OK" reply, but it actually applied,
+# same as the earlier RESET# case): we saw real successful LOGIN + heartbeat
+# exchanges from this device while the server was running on 443. Don't flip
+# this back to 5023 again without checking the device's current SERVER config.
+PORT     = 443
 API_BASE = 'http://127.0.0.1:8000/api'
 TIMEOUT  = 120   # seconds before idle connection closes
 
