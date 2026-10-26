@@ -3,7 +3,7 @@ from django.db import models
 
 class Vehicle(models.Model):
     vehicle_id = models.AutoField(primary_key=True, db_column='VehicleID')
-    imei       = models.CharField(max_length=15, unique=True, db_column='IMEI')
+    imei       = models.CharField(max_length=15, unique=True, null=True, blank=True, db_column='IMEI')
     name       = models.CharField(max_length=100, db_column='Name')
     type       = models.CharField(max_length=20,  db_column='Type',   default='car')
     plate      = models.CharField(max_length=20,  db_column='Plate',  default='')
