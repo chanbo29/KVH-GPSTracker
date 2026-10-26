@@ -88,9 +88,16 @@ def parse_packet(data: bytes):
     serial_b = data[4 + pkt_len - 4 : 4 + pkt_len - 2]
     serial   = struct.unpack('>H', serial_b)[0] if len(serial_b)==2 else 0
 
-    # CRC check
-    crc_data     = data[2 : 2 + pkt_len]
-    received_crc = struct.unpack('>H', data[2+pkt_len:2+pkt_len+2])[0]
+    # CRC check — covers the length byte + protocol + content + serial
+    # (everything up to but not including the CRC field itself). The
+    # previous slices here were both shifted one byte too far: crc_data
+    # was swallowing the first CRC byte, and received_crc was reading the
+    # second CRC byte + the first stop byte instead of the real 2 CRC
+    # bytes. This never blocked login/GPS/ack handling (crc_ok is only
+    # logged, never checked), but it meant the CRC: ✅/❌ log line was
+    # never trustworthy.
+    crc_data     = data[2 : pkt_len + 1]
+    received_crc = struct.unpack('>H', data[pkt_len+1 : pkt_len+3])[0]
     computed_crc = crc16(crc_data)
     crc_ok       = received_crc == computed_crc
 
