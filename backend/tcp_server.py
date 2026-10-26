@@ -7,7 +7,11 @@ import socket, threading, struct, requests, json
 from datetime import datetime
 
 HOST     = '0.0.0.0'
-PORT     = 5023
+# 443 instead of our original 5023 — some carrier "GPS/IoT" SIMs only allow traffic
+# to standard web ports (80/443) and silently drop anything else. 80 is already
+# taken by Nginx on this VPS, so 443 (unused here, no SSL configured) is the one
+# free standard port left to test that theory with.
+PORT     = 443
 API_BASE = 'http://127.0.0.1:8000/api'
 TIMEOUT  = 120   # seconds before idle connection closes
 
