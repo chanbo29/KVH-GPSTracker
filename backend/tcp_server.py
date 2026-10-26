@@ -11,14 +11,22 @@ PORT     = 5023
 API_BASE = 'http://127.0.0.1:8000/api'
 TIMEOUT  = 120   # seconds before idle connection closes
 
-# ── CRC-ITU-T (GT06 standard) ─────────────────────────────────
+# ── CRC-16/X-25 (what GT06 actually uses — reflected poly 0x1021,
+#    i.e. 0x8408 bit-reversed, with inverted output). The earlier
+#    non-reflected version here computed a different checksum than
+#    the tracker does, so every login ACK we sent back had a wrong
+#    CRC — the tracker silently rejected it and just kept retrying
+#    login forever instead of ever sending GPS data. ────────────
 def crc16(data: bytes) -> int:
     crc = 0xFFFF
     for b in data:
-        crc ^= b << 8
+        crc ^= b
         for _ in range(8):
-            crc = (crc << 1) ^ 0x1021 if crc & 0x8000 else crc << 1
-    return crc & 0xFFFF
+            if crc & 0x0001:
+                crc = (crc >> 1) ^ 0x8408
+            else:
+                crc >>= 1
+    return (~crc) & 0xFFFF
 
 # ── Build response packet ──────────────────────────────────────
 def build_response(protocol: int, serial: int) -> bytes:
