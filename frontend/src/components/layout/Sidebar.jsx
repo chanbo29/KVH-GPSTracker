@@ -6,13 +6,15 @@ import { t } from '../../constants/i18n.js'
 
 const EASE = 'cubic-bezier(.4,0,.2,1)'
 
-/* Refined, "quiet" accent palette — a translucent tint of the brand blue instead of a
-   flat white block or a bright gradient glow, so the active state reads as calm/premium */
-const ACCENT        = '#3B82F6'
-const ACCENT_TINT   = 'rgba(59,130,246,.14)'
-const ACCENT_TINT_H = 'rgba(59,130,246,.22)'
+/* Console-style accent — a warm "beacon" amber instead of generic SaaS blue, so the
+   active state reads like a dispatch/ops console rather than a stock admin template. */
+const ACCENT        = '#F2A93B'
+const ACCENT_DARK   = '#1A1306'   // icon fill color sitting on top of the solid accent badge
+const ACCENT_TINT   = 'rgba(242,169,59,.12)'
+const ACCENT_TINT_H = 'rgba(242,169,59,.20)'
 const HAIRLINE      = 'rgba(255,255,255,.07)'
 const HOVER_BG       = 'rgba(255,255,255,.045)'
+const ONLINE         = '#34D399'
 
 /* Group nav items by category so a 14-item list becomes 4 short, scannable groups. */
 /* Any id not listed here falls into "More" automatically, so nothing breaks if the */
@@ -98,29 +100,26 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
         style={{
           width:'100%', display:'flex', alignItems:'center', gap:11,
           justifyContent: collapsed ? 'center' : 'flex-start',
-          padding: collapsed ? '8px 0' : '8px 10px', borderRadius:9, border:'none',
+          padding: collapsed ? '7px 0' : '7px 10px 7px 7px', borderRadius:9, border:'none',
           cursor:'pointer', marginBottom:2, textAlign:'left',
           background: bg,
           transition: `background .15s ${EASE}`,
           position:'relative',
         }}
       >
-        {/* slim accent indicator — inset, not touching the sidebar edge; present in both states */}
-        <span style={{
-          position:'absolute', left: collapsed ? 4 : 2, top:'22%', bottom:'22%', width:2.5, borderRadius:2,
-          background: isActive ? ACCENT : 'transparent',
-          transition: `background .18s ${EASE}`,
-        }}/>
-
+        {/* Active page gets a solid-filled icon badge (dark glyph on amber) instead of a
+            flat accent bar — reads as a selected console button, not a tinted list row. */}
         <div style={{
           width:28, height:28, borderRadius:7, flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'center',
-          transition: `background .15s ${EASE}`,
+          background: isActive ? ACCENT : 'transparent',
+          boxShadow: isActive ? '0 2px 8px rgba(242,169,59,.35)' : 'none',
+          transition: `background .18s ${EASE}, box-shadow .18s ${EASE}`,
         }}>
-          <Icon size={15.5} color={isActive ? '#CFE2FF' : (hover ? '#B8C3D6' : '#7E8CA3')} style={{ transition: `color .15s ${EASE}` }} />
+          <Icon size={15} color={isActive ? ACCENT_DARK : (hover ? '#B8C3D6' : '#7E8CA3')} style={{ transition: `color .15s ${EASE}` }} />
         </div>
         <FadeLabel collapsed={collapsed} style={{ flex: collapsed ? 'none' : 1 }}>
-          <span style={{ color: isActive ? '#F1F5F9' : '#8B96A8', fontSize:13, fontWeight: isActive ? 600 : 400, transition: `color .15s ${EASE}` }}>
+          <span style={{ color: isActive ? '#F8FAFC' : '#8B96A8', fontSize:13, fontWeight: isActive ? 600 : 400, transition: `color .15s ${EASE}` }}>
             {label}
           </span>
         </FadeLabel>
@@ -138,9 +137,11 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
 
   return (
     <div style={{ position:'relative', width: collapsed ? 72 : 240, minWidth: collapsed ? 72 : 240, flexShrink:0, height:'100vh', transition: `width .24s ${EASE}, min-width .24s ${EASE}` }}>
+      <style>{`@keyframes kvhLivePulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 6px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}`}</style>
       <div style={{
         width:'100%', height:'100%',
-        background:C.sidebar, display:'flex', flexDirection:'column', overflow:'hidden',
+        background:`linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0) 140px), ${C.sidebar}`,
+        display:'flex', flexDirection:'column', overflow:'hidden',
         borderRight:`1px solid ${HAIRLINE}`,
       }}>
 
@@ -190,6 +191,23 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
           ))}
         </div>
 
+        {/* ── Live status strip — a dispatch-console signal that the fleet feed is up, ── */}
+        {/* ── grounding the sidebar in what this app actually does rather than decoration ── */}
+        <div style={{ padding: collapsed ? '0 8px 10px' : '0 14px 10px', transition: `padding .24s ${EASE}` }}>
+          <div style={{
+            display:'flex', alignItems:'center', gap: collapsed ? 0 : 8,
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            background:'rgba(52,211,153,.07)', border:'1px solid rgba(52,211,153,.16)',
+            borderRadius:9, padding: collapsed ? '7px 0' : '7px 11px',
+            transition: `padding .24s ${EASE}`,
+          }}>
+            <span style={{ width:7, height:7, borderRadius:'50%', background:ONLINE, flexShrink:0, animation:'kvhLivePulse 2s infinite' }}/>
+            <FadeLabel collapsed={collapsed} maxWidth={140}>
+              <span style={{ color:'#86EFC0', fontSize:11, fontWeight:600, whiteSpace:'nowrap' }}>Fleet feed online</span>
+            </FadeLabel>
+          </div>
+        </div>
+
         {/* ── Quiet footer — grounds the bottom now that the profile block has moved to the header ── */}
         <div style={{ borderTop:`1px solid ${HAIRLINE}`, padding: collapsed ? '12px 8px' : '12px 18px', textAlign: collapsed ? 'center' : 'left', transition: `padding .24s ${EASE}` }}>
           <FadeLabel collapsed={collapsed} maxWidth={160}>
@@ -213,7 +231,7 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
           boxShadow:'0 2px 8px rgba(0,0,0,.3)', zIndex:5,
           transition: `background .15s ${EASE}, color .15s ${EASE}, border-color .15s ${EASE}`,
         }}
-        onMouseEnter={e => { e.currentTarget.style.background='#1E293B'; e.currentTarget.style.color='#F1F5F9'; e.currentTarget.style.borderColor='rgba(255,255,255,.18)' }}
+        onMouseEnter={e => { e.currentTarget.style.background='#1E293B'; e.currentTarget.style.color=ACCENT; e.currentTarget.style.borderColor='rgba(242,169,59,.35)' }}
         onMouseLeave={e => { e.currentTarget.style.background=C.sidebar; e.currentTarget.style.color='#7E8CA3'; e.currentTarget.style.borderColor=HAIRLINE }}
       >
         <span style={{ display:'flex', transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)', transition: `transform .24s ${EASE}` }}>
