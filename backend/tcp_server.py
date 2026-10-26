@@ -42,8 +42,11 @@ def build_response(protocol: int, serial: int) -> bytes:
 
 # ── Decode BCD-encoded IMEI (8 bytes → 15-digit string) ───────
 def decode_imei(raw: bytes) -> str:
-    hex_str = raw.hex()            # e.g. '865784056472668 0'
-    return hex_str[:15]            # drop the trailing padding nibble
+    # 8 raw bytes = 16 hex nibbles for a 15-digit IMEI — the LEADING nibble is the
+    # padding/type nibble (always comes out as '0' here), not the trailing one.
+    # e.g. raw hex '0865784056472668' -> real IMEI is '865784056472668'.
+    hex_str = raw.hex()
+    return hex_str[1:]             # drop the leading padding nibble, keep all 15 real digits
 
 # ── Parse latitude / longitude ────────────────────────────────
 def decode_coord(raw: int, is_south_or_west: bool) -> float:
