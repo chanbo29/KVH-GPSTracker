@@ -28,7 +28,6 @@ class Migration(migrations.Migration):
             options={
                 'db_table': 'Alerts',
                 'ordering': ['-alert_time'],
-                'managed': False,
             },
         ),
         migrations.CreateModel(
@@ -47,7 +46,6 @@ class Migration(migrations.Migration):
             ],
             options={
                 'db_table': 'Clients',
-                'managed': False,
             },
         ),
         migrations.CreateModel(
@@ -66,7 +64,6 @@ class Migration(migrations.Migration):
             options={
                 'db_table': 'Drivers',
                 'ordering': ['name'],
-                'managed': False,
             },
         ),
         migrations.CreateModel(
@@ -86,7 +83,6 @@ class Migration(migrations.Migration):
             ],
             options={
                 'db_table': 'Geofences',
-                'managed': False,
             },
         ),
         migrations.CreateModel(
@@ -105,7 +101,6 @@ class Migration(migrations.Migration):
             ],
             options={
                 'db_table': 'GPSDevices',
-                'managed': False,
             },
         ),
         migrations.CreateModel(
@@ -125,7 +120,6 @@ class Migration(migrations.Migration):
             options={
                 'db_table': 'GPSLogs',
                 'ordering': ['-timestamp'],
-                'managed': False,
             },
         ),
         migrations.CreateModel(
@@ -147,7 +141,6 @@ class Migration(migrations.Migration):
             ],
             options={
                 'db_table': 'Vehicles',
-                'managed': False,
             },
         ),
         migrations.CreateModel(

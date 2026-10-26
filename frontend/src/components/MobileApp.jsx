@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import {
   Home, Map, Car, Bell, MoreHorizontal, LogOut,
   ChevronRight, ChevronLeft, Navigation, Wifi, WifiOff,
@@ -360,8 +362,6 @@ function TrackingScreen() {
   const [sel,       setSel]       = useState(null)
   const [sheet,     setSheet]     = useState(false)
   const [sheetFilter, setSheetFilter] = useState('all')
-  const [apiKey,    setApiKey]    = useState(import.meta.env.VITE_GOOGLE_MAPS_KEY||'')
-  const [keyInput,  setKeyInput]  = useState('')
   const [ready,     setReady]     = useState(false)
   const [search,    setSearch]    = useState('')
   const mapEl=useRef(null); const gmap=useRef(null); const marks=useRef({})
@@ -371,55 +371,47 @@ function TrackingScreen() {
   const moving  = vehicles.filter(v=>v.status==='moving').length
   const stopped = vehicles.filter(v=>v.status==='stopped').length
   const offline = vehicles.filter(v=>v.status==='offline').length
+  const mkIcon=(status,initial)=>L.divIcon({
+    className:'kvh-mobile-marker',
+    html:`<div style="width:30px;height:30px;border-radius:50%;background:${sc(status)};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px;">${initial}</div>`,
+    iconSize:[30,30],
+    iconAnchor:[15,15],
+  })
   const initMap=()=>{
-    if(!mapEl.current||!window.google?.maps||gmap.current)return
-    gmap.current=new window.google.maps.Map(mapEl.current,{center:{lat:11.5564,lng:104.9282},zoom:13,mapTypeId:'hybrid',disableDefaultUI:true,zoomControl:true,zoomControlOptions:{position:window.google.maps.ControlPosition.RIGHT_CENTER}})
+    if(!mapEl.current||gmap.current)return
+    const map=L.map(mapEl.current,{center:[11.5564,104.9282],zoom:13,zoomControl:true})
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19,
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map)
+    gmap.current=map
     setReady(true)
   }
-  const loadMap=key=>{
-    if(window.google?.maps){initMap();return}
-    window.__mobMap=()=>initMap()
-    const s=document.createElement('script'); s.src='https://maps.googleapis.com/maps/api/js?key='+key+'&callback=__mobMap'; s.async=true; s.defer=true; document.head.appendChild(s)
-  }
-  useEffect(()=>{if(apiKey)loadMap(apiKey)},[apiKey])
+  useEffect(()=>{initMap()},[])
   useEffect(()=>{
-    if(!ready||!window.google?.maps)return
+    if(!ready)return
     vehicles.forEach(v=>{
       if(!v.lat||!v.lng)return
-      if(marks.current[v.imei]){marks.current[v.imei].setPosition({lat:v.lat,lng:v.lng});return}
-      const m=new window.google.maps.Marker({position:{lat:v.lat,lng:v.lng},map:gmap.current,label:{text:dName(v).charAt(0).toUpperCase(),color:'white',fontWeight:'bold',fontSize:'12px'},icon:{path:window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,scale:7,fillColor:sc(v.status),fillOpacity:1,strokeColor:'white',strokeWeight:2.5},title:dName(v)+' · '+v.plate})
-      m.addListener('click',()=>{setSel(v);setSheet(false)})
+      if(marks.current[v.imei]){marks.current[v.imei].setLatLng([v.lat,v.lng]);return}
+      const m=L.marker([v.lat,v.lng],{icon:mkIcon(v.status,dName(v).charAt(0).toUpperCase()),title:dName(v)+' · '+v.plate}).addTo(gmap.current)
+      m.on('click',()=>{setSel(v);setSheet(false)})
       marks.current[v.imei]=m
     })
   },[vehicles,ready])
-  const panTo=v=>{setSel(v);setSheet(false);if(gmap.current&&v.lat&&v.lng){gmap.current.panTo({lat:v.lat,lng:v.lng});gmap.current.setZoom(16)}}
+  const panTo=v=>{setSel(v);setSheet(false);if(gmap.current&&v.lat&&v.lng){gmap.current.flyTo([v.lat,v.lng],16)}}
   const fitAll=()=>{
-    if(!gmap.current||!window.google?.maps)return
+    if(!gmap.current)return
     const pts=vehicles.filter(v=>v.lat&&v.lng)
     if(!pts.length)return
-    if(pts.length===1){gmap.current.panTo({lat:pts[0].lat,lng:pts[0].lng});gmap.current.setZoom(16);return}
-    const bounds=new window.google.maps.LatLngBounds()
-    pts.forEach(v=>bounds.extend({lat:v.lat,lng:v.lng}))
-    gmap.current.fitBounds(bounds,64)
+    if(pts.length===1){gmap.current.flyTo([pts[0].lat,pts[0].lng],16);return}
+    const bounds=L.latLngBounds(pts.map(v=>[v.lat,v.lng]))
+    gmap.current.fitBounds(bounds,{padding:[64,64]})
   }
   const openFilter=key=>{setSheetFilter(key);setSearch('');setSel(null);setSheet(true)}
   return (
     <div style={{ position:'relative', flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
       {loading && <LoadingBar show/>}
       <div ref={mapEl} style={{ flex:1 }}/>
-      {!apiKey && (
-        <div style={{ position:'absolute', inset:0, background:'rgba(15,23,42,.9)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, zIndex:50 }}>
-          <div style={{ background:'white', borderRadius:20, padding:28, width:'100%', maxWidth:340, textAlign:'center' }}>
-            <div style={{ width:56, height:56, borderRadius:16, background:C.blueL, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px' }}><Navigation size={26} color={C.blue}/></div>
-            <div style={{ color:C.navy, fontWeight:800, fontSize:18, marginBottom:6 }}>{t('mobile.googleMapsKey')}</div>
-            <div style={{ color:C.muted, fontSize:13, marginBottom:14 }}>{t('mobile.enterApiKey')}</div>
-            <input value={keyInput} onChange={e=>setKeyInput(e.target.value)} placeholder="AIzaSy..."
-              style={{ width:'100%', padding:'12px', border:'1px solid '+C.border, borderRadius:10, fontSize:13, outline:'none', marginBottom:12, boxSizing:'border-box', fontFamily:'monospace' }}/>
-            <button onClick={()=>{if(keyInput.trim()){setApiKey(keyInput.trim());loadMap(keyInput.trim())}}}
-              style={{ width:'100%', padding:'13px', background:C.blue, color:'white', border:'none', borderRadius:10, fontSize:15, fontWeight:700, cursor:'pointer' }}>{t('mobile.loadMap')}</button>
-          </div>
-        </div>
-      )}
 
       {/* ── Fleet summary bar + quick status filters ─────────────────── */}
       <div style={{ position:'absolute', top:'max(14px,env(safe-area-inset-top))', left:12, right:12, zIndex:40, display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
@@ -1095,17 +1087,46 @@ function HistoryScreen({ onBack }) {
   const [route,   setRoute]   = useState([])
   const [idx,     setIdx]     = useState(0)
   const [playing, setPlaying] = useState(false)
-  const [apiKey,  setApiKey]  = useState(import.meta.env.VITE_GOOGLE_MAPS_KEY||'')
   const [ready,   setReady]   = useState(false)
-  const [mapLoading, setMapLoading] = useState(false)
-  const mapEl=useRef(null); const gmap=useRef(null); const marker=useRef(null); const poly=useRef(null); const timer=useRef(null)
-  const initMap=()=>{ if(!mapEl.current||!window.google?.maps||gmap.current)return; gmap.current=new window.google.maps.Map(mapEl.current,{center:{lat:11.5564,lng:104.9282},zoom:13,mapTypeId:'hybrid',disableDefaultUI:true,zoomControl:true,zoomControlOptions:{position:window.google.maps.ControlPosition.RIGHT_CENTER}}); setReady(true); setMapLoading(false) }
-  const loadMap=key=>{ if(window.google?.maps){initMap();return}; setMapLoading(true); window.__histM=()=>initMap(); const s=document.createElement('script'); s.src='https://maps.googleapis.com/maps/api/js?key='+key+'&callback=__histM'; s.async=true; s.defer=true; document.head.appendChild(s) }
-  useEffect(()=>{if(apiKey)loadMap(apiKey)},[apiKey])
-  const draw=pts=>{ if(!gmap.current||!window.google?.maps||!pts.length)return; if(poly.current)poly.current.setMap(null); if(marker.current)marker.current.setMap(null); poly.current=new window.google.maps.Polyline({path:pts,geodesic:true,strokeColor:C.blue,strokeOpacity:.8,strokeWeight:4,map:gmap.current}); new window.google.maps.Marker({position:pts[0],map:gmap.current,label:{text:'A',color:'white',fontWeight:'bold'},icon:{path:window.google.maps.SymbolPath.CIRCLE,scale:12,fillColor:C.green,fillOpacity:1,strokeColor:'white',strokeWeight:2}}); new window.google.maps.Marker({position:pts[pts.length-1],map:gmap.current,label:{text:'B',color:'white',fontWeight:'bold'},icon:{path:window.google.maps.SymbolPath.CIRCLE,scale:12,fillColor:C.red,fillOpacity:1,strokeColor:'white',strokeWeight:2}}); marker.current=new window.google.maps.Marker({position:pts[0],map:gmap.current,icon:{path:window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,scale:7,fillColor:C.blue,fillOpacity:1,strokeColor:'white',strokeWeight:2}}); const b=new window.google.maps.LatLngBounds(); pts.forEach(p=>b.extend(p)); gmap.current.fitBounds(b,{top:50,right:30,bottom:120,left:30}); setIdx(0) }
+  const mapEl=useRef(null); const gmap=useRef(null); const marker=useRef(null); const poly=useRef(null); const endpoints=useRef([]); const timer=useRef(null)
+  const dotIcon=(label,color)=>L.divIcon({
+    className:'kvh-hist-dot',
+    html:`<div style="width:24px;height:24px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;">${label}</div>`,
+    iconSize:[24,24], iconAnchor:[12,12],
+  })
+  const playIcon=L.divIcon({
+    className:'kvh-hist-marker',
+    html:`<div style="width:22px;height:22px;"><svg width="22" height="22" viewBox="0 0 24 24" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))"><path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${C.blue}" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg></div>`,
+    iconSize:[22,22], iconAnchor:[11,11],
+  })
+  const initMap=()=>{
+    if(!mapEl.current||gmap.current)return
+    const map=L.map(mapEl.current,{center:[11.5564,104.9282],zoom:13,zoomControl:true})
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      maxZoom:19,
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map)
+    gmap.current=map
+    setReady(true)
+  }
+  useEffect(()=>{initMap()},[])
+  const draw=pts=>{
+    if(!gmap.current||!pts.length)return
+    if(poly.current)gmap.current.removeLayer(poly.current)
+    if(marker.current)gmap.current.removeLayer(marker.current)
+    endpoints.current.forEach(m=>gmap.current.removeLayer(m)); endpoints.current=[]
+    const latlngs=pts.map(p=>[p.lat,p.lng])
+    poly.current=L.polyline(latlngs,{color:C.blue,opacity:.8,weight:4}).addTo(gmap.current)
+    const a=L.marker(latlngs[0],{icon:dotIcon('A',C.green)}).addTo(gmap.current)
+    const b=L.marker(latlngs[latlngs.length-1],{icon:dotIcon('B',C.red)}).addTo(gmap.current)
+    endpoints.current=[a,b]
+    marker.current=L.marker(latlngs[0],{icon:playIcon}).addTo(gmap.current)
+    gmap.current.fitBounds(L.latLngBounds(latlngs),{paddingTopLeft:[30,50],paddingBottomRight:[30,120]})
+    setIdx(0)
+  }
   const load=()=>{ const r=MOCK[imei]?.[date]||[]; setRoute(r); setIdx(0); setPlaying(false); if(r.length&&ready)draw(r) }
-  useEffect(()=>{ clearInterval(timer.current); if(!playing||!route.length)return; timer.current=setInterval(()=>{ setIdx(p=>{ const n=p+1; if(n>=route.length){setPlaying(false);clearInterval(timer.current);return p}; if(marker.current&&window.google?.maps)marker.current.setPosition(route[n]); return n }) },600); return()=>clearInterval(timer.current) },[playing,route])
-  const go=n=>{ const i=Math.max(0,Math.min(route.length-1,n)); setIdx(i); if(marker.current&&window.google?.maps&&route[i])marker.current.setPosition(route[i]) }
+  useEffect(()=>{ clearInterval(timer.current); if(!playing||!route.length)return; timer.current=setInterval(()=>{ setIdx(p=>{ const n=p+1; if(n>=route.length){setPlaying(false);clearInterval(timer.current);return p}; if(marker.current)marker.current.setLatLng([route[n].lat,route[n].lng]); return n }) },600); return()=>clearInterval(timer.current) },[playing,route])
+  const go=n=>{ const i=Math.max(0,Math.min(route.length-1,n)); setIdx(i); if(marker.current&&route[i])marker.current.setLatLng([route[i].lat,route[i].lng]) }
   const cur=route[idx]; const pct=route.length>1?(idx/(route.length-1)*100):0
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
@@ -1122,22 +1143,7 @@ function HistoryScreen({ onBack }) {
       </div>
       <div style={{ flex:1, position:'relative', minHeight:0 }}>
         <div ref={mapEl} style={{ width:'100%', height:'100%' }}/>
-        {mapLoading && (
-          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:C.bg }}>
-            <div style={{ textAlign:'center' }}><Spinner size={40}/><div style={{ color:C.muted, fontSize:14, marginTop:14 }}>Loading Google Maps...</div></div>
-          </div>
-        )}
-        {!apiKey && (
-          <div style={{ position:'absolute', inset:0, background:'rgba(15,23,42,.9)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, zIndex:10 }}>
-            <div style={{ background:'white', borderRadius:16, padding:24, width:'100%', maxWidth:320, textAlign:'center' }}>
-              <Navigation size={30} color={C.blue} style={{ margin:'0 auto 10px' }}/>
-              <div style={{ color:C.navy, fontWeight:700, fontSize:16, marginBottom:12 }}>Maps API Key Required</div>
-              <input value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder="AIzaSy..." style={{ width:'100%', padding:'10px', border:'1px solid '+C.border, borderRadius:8, fontSize:13, outline:'none', marginBottom:10, boxSizing:'border-box' }}/>
-              <button onClick={()=>{if(apiKey.trim())loadMap(apiKey.trim())}} style={{ width:'100%', padding:'11px', background:C.blue, color:'white', border:'none', borderRadius:8, fontSize:14, fontWeight:700, cursor:'pointer' }}>Load Map</button>
-            </div>
-          </div>
-        )}
-        {route.length===0&&apiKey&&!mapLoading && (
+        {route.length===0 && (
           <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:10, background:'rgba(240,247,255,.94)', pointerEvents:'none' }}>
             <MapPin size={38} color={C.faint}/><div style={{ color:C.muted, fontSize:14 }}>Select vehicle and date, then tap Load</div>
           </div>

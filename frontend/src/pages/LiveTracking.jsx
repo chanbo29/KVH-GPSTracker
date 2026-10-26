@@ -4,6 +4,8 @@ import {
   MapPin, X, RefreshCw, Users, Search,
   ChevronLeft, ChevronRight, User,
 } from 'lucide-react'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { api } from '../api/client.js'
 
 const T = {
@@ -33,27 +35,47 @@ const STATUS = {
 const st = s => STATUS[s] || STATUS.offline
 
 function animateMarker(marker, lat, lng, ms = 900) {
-  const from = { lat: marker.getPosition().lat(), lng: marker.getPosition().lng() }
+  const cur  = marker.getLatLng()
+  const from = { lat: cur.lat, lng: cur.lng }
   const t0   = performance.now()
   const ease = t => t < .5 ? 2*t*t : -1+(4-2*t)*t
   const step = now => {
     const p = Math.min((now-t0)/ms, 1)
-    marker.setPosition({ lat:from.lat+(lat-from.lat)*ease(p), lng:from.lng+(lng-from.lng)*ease(p) })
+    marker.setLatLng([from.lat+(lat-from.lat)*ease(p), from.lng+(lng-from.lng)*ease(p)])
     if (p < 1) requestAnimationFrame(step)
   }
   requestAnimationFrame(step)
 }
 
-function mkIcon(status, course = 0) {
-  return {
-    path:         window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-    scale:        status === 'moving' ? 8 : 6,
-    fillColor:    st(status).color,
-    fillOpacity:  1,
-    strokeColor:  'white',
-    strokeWeight: 2.5,
-    rotation:     course,
-  }
+// Arrow-shaped div icon, rotated to the vehicle's heading — replaces the
+// Google Maps FORWARD_CLOSED_ARROW symbol with a free Leaflet equivalent.
+function mkDivIcon(status, course = 0) {
+  const color = st(status).color
+  const size  = status === 'moving' ? 26 : 20
+  return L.divIcon({
+    className: 'kvh-vehicle-marker',
+    html: `<div style="width:${size}px;height:${size}px;transform:rotate(${course}deg);transform-origin:center;">
+      <svg width="${size}" height="${size}" viewBox="0 0 24 24" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))">
+        <path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+      </svg>
+    </div>`,
+    iconSize:   [size, size],
+    iconAnchor: [size / 2, size / 2],
+  })
+}
+
+// Pulsing green ring behind a moving vehicle — reuses the kvhP keyframe
+// already defined in this file's <style> block.
+function pulseDivIcon() {
+  return L.divIcon({
+    className: 'kvh-pulse-marker',
+    html: `<div style="position:relative;width:44px;height:44px">
+      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(22,163,74,.2);animation:kvhP 1.8s ease-out infinite"></div>
+      <div style="position:absolute;inset:10px;border-radius:50%;background:rgba(22,163,74,.14);animation:kvhP 1.8s ease-out infinite .6s"></div>
+    </div>`,
+    iconSize:   [44, 44],
+    iconAnchor: [22, 22],
+  })
 }
 
 export default function LiveTracking() {
@@ -64,15 +86,12 @@ export default function LiveTracking() {
   const [loading,  setLoading]  = useState(true)
   const [open,     setOpen]     = useState(true)
   const [lastSync, setLastSync] = useState(null)
-  const [apiKey,   setApiKey]   = useState(import.meta.env.VITE_GOOGLE_MAPS_KEY || '')
-  const [keyInput, setKeyInput] = useState('')
   const [mapReady, setMapReady] = useState(false)
 
   const mapRef     = useRef(null)
   const gmap       = useRef(null)
   const markers    = useRef({})
   const pulses     = useRef({})
-  const PulseClass = useRef(null)
 
   const fetch = useCallback(async () => {
     try {
@@ -82,69 +101,41 @@ export default function LiveTracking() {
   }, [])
 
   const syncMarkers = useCallback((data) => {
-    if (!gmap.current || !window.google?.maps) return
+    if (!gmap.current) return
     data.forEach(v => {
       const lat = parseFloat(v.lat||0), lng = parseFloat(v.lng||0)
       if (!lat && !lng) return
-      const pos = {lat,lng}, icon = mkIcon(v.status, v.course||0), isMoving = v.status==='moving'
+      const isMoving = v.status === 'moving'
+      const icon     = mkDivIcon(v.status, v.course||0)
       if (markers.current[v.imei]) {
         animateMarker(markers.current[v.imei], lat, lng)
         markers.current[v.imei].setIcon(icon)
       } else {
-        const m = new window.google.maps.Marker({
-          position:pos, map:gmap.current, title:v.name, icon,
-          label:{text:v.name.charAt(0).toUpperCase(), color:'white', fontWeight:'bold', fontSize:'11px'},
-        })
-        m.addListener('click', ()=>{ setSelected(v); gmap.current.panTo(pos); gmap.current.setZoom(16) })
+        const m = L.marker([lat,lng], { icon, title:v.name }).addTo(gmap.current)
+        m.on('click', ()=>{ setSelected(v); gmap.current.flyTo([lat,lng], 16) })
         markers.current[v.imei] = m
       }
-      if (isMoving && PulseClass.current) {
-        if (pulses.current[v.imei]) pulses.current[v.imei].updatePosition(new window.google.maps.LatLng(lat,lng))
-        else pulses.current[v.imei] = new PulseClass.current(new window.google.maps.LatLng(lat,lng), gmap.current)
+      if (isMoving) {
+        if (pulses.current[v.imei]) pulses.current[v.imei].setLatLng([lat,lng])
+        else pulses.current[v.imei] = L.marker([lat,lng], { icon:pulseDivIcon(), interactive:false, zIndexOffset:-1000 }).addTo(gmap.current)
       } else if (!isMoving && pulses.current[v.imei]) {
-        pulses.current[v.imei].setMap(null); delete pulses.current[v.imei]
+        gmap.current.removeLayer(pulses.current[v.imei]); delete pulses.current[v.imei]
       }
     })
   }, [])
 
   const initMap = useCallback(() => {
-    if (!mapRef.current || !window.google?.maps || gmap.current) return
-    gmap.current = new window.google.maps.Map(mapRef.current, {
-      center:{lat:11.5564,lng:104.9282}, zoom:13, mapTypeId:'hybrid',
-      disableDefaultUI:true, zoomControl:true, fullscreenControl:true,
-      zoomControlOptions:{position:window.google.maps.ControlPosition.RIGHT_CENTER},
-      fullscreenControlOptions:{position:window.google.maps.ControlPosition.RIGHT_TOP},
-      mapTypeControl:true, mapTypeControlOptions:{position:window.google.maps.ControlPosition.TOP_RIGHT},
-    })
-    class PulseOverlay extends window.google.maps.OverlayView {
-      constructor(pos,map){super();this._pos=pos;this._div=null;this.setMap(map)}
-      onAdd(){
-        const d=document.createElement('div')
-        d.style.cssText='position:absolute;width:44px;height:44px;transform:translate(-50%,-50%);pointer-events:none'
-        d.innerHTML='<div style="position:absolute;inset:0;border-radius:50%;background:rgba(22,163,74,.2);animation:kvhP 1.8s ease-out infinite;"></div><div style="position:absolute;inset:10px;border-radius:50%;background:rgba(22,163,74,.14);animation:kvhP 1.8s ease-out infinite .6s;"></div>'
-        this._div=d;this.getPanes().overlayLayer.appendChild(d)
-      }
-      draw(){
-        if(!this._div)return
-        const pt=this.getProjection().fromLatLngToDivPixel(this._pos)
-        if(pt){this._div.style.left=pt.x+'px';this._div.style.top=pt.y+'px'}
-      }
-      onRemove(){this._div?.parentNode?.removeChild(this._div);this._div=null}
-      updatePosition(pos){this._pos=pos;this.draw()}
-    }
-    PulseClass.current = PulseOverlay
+    if (!mapRef.current || gmap.current) return
+    const map = L.map(mapRef.current, { center:[11.5564,104.9282], zoom:13, zoomControl:true })
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map)
+    gmap.current = map
     setMapReady(true)
   }, [])
 
-  const loadMap = useCallback((key) => {
-    if (window.google?.maps){initMap();return}
-    window.__kvhLT = initMap
-    const sc = document.createElement('script')
-    sc.src=`https://maps.googleapis.com/maps/api/js?key=${key}&callback=__kvhLT`
-    sc.async=true; sc.defer=true; document.head.appendChild(sc)
-  }, [initMap])
-
-  useEffect(()=>{ if(apiKey) loadMap(apiKey) },           [apiKey])
+  useEffect(()=>{ initMap() },                            [initMap])
   useEffect(()=>{ if(mapReady) syncMarkers(vehicles) },   [mapReady,vehicles])
   useEffect(()=>{
     if(!selected) return
@@ -160,7 +151,7 @@ export default function LiveTracking() {
   const focus = v => {
     setSelected(v)
     if(gmap.current&&v.lat&&parseFloat(v.lat)!==0)
-      {gmap.current.panTo({lat:parseFloat(v.lat),lng:parseFloat(v.lng)});gmap.current.setZoom(16)}
+      gmap.current.flyTo([parseFloat(v.lat),parseFloat(v.lng)], 16)
   }
 
   const list    = vehicles.filter(v=>(filter==='all'||v.status===filter)&&(!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.toLowerCase().includes(search.toLowerCase())||v.owner?.toLowerCase().includes(search.toLowerCase())))
@@ -366,25 +357,6 @@ export default function LiveTracking() {
       ════════════════════════════════════════════════════ */}
       <div style={{ flex:1, position:'relative', overflow:'hidden' }}>
         <div ref={mapRef} style={{ position:'absolute', inset:0 }}/>
-
-        {/* API key overlay */}
-        {!apiKey && (
-          <div style={{ position:'absolute', inset:0, background:'rgba(15,23,42,.9)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:20 }}>
-            <div style={{ background:'white', borderRadius:20, padding:'36px 32px', width:'100%', maxWidth:400, textAlign:'center' }}>
-              <div style={{ width:64, height:64, borderRadius:18, background:T.blueL, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px' }}>
-                <Navigation size={28} color={T.blue}/>
-              </div>
-              <div style={{ fontWeight:800, fontSize:20, color:T.navy, marginBottom:6 }}>Google Maps API Key</div>
-              <div style={{ color:T.muted, fontSize:13, marginBottom:20, lineHeight:1.7 }}>Enter your key to enable live vehicle tracking.</div>
-              <input value={keyInput} onChange={e=>setKeyInput(e.target.value)} placeholder="AIzaSy…"
-                style={{ width:'100%', padding:'12px 14px', border:`1.5px solid ${T.blue}`, borderRadius:10, fontSize:13, outline:'none', marginBottom:14, boxSizing:'border-box', fontFamily:'monospace' }}/>
-              <button onClick={()=>{ if(keyInput.trim()){setApiKey(keyInput.trim());loadMap(keyInput.trim())} }}
-                style={{ width:'100%', padding:'13px', background:T.blue, color:'white', border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer' }}>
-                Load Map
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Sidebar toggle */}
         <button onClick={()=>setOpen(p=>!p)}
