@@ -380,9 +380,9 @@ function TrackingScreen() {
   const initMap=()=>{
     if(!mapEl.current||gmap.current)return
     const map=L.map(mapEl.current,{center:[11.5564,104.9282],zoom:13,zoomControl:true})
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{
+    L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}{r}.png',{
       maxZoom:19,
-      attribution:'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom',
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style by <a href="https://wikimediafoundation.org/wiki/Maps_Terms_of_Use">Wikimedia</a>',
     }).addTo(map)
     gmap.current=map
     setReady(true)
@@ -1102,9 +1102,9 @@ function HistoryScreen({ onBack }) {
   const initMap=()=>{
     if(!mapEl.current||gmap.current)return
     const map=L.map(mapEl.current,{center:[11.5564,104.9282],zoom:13,zoomControl:true})
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{
+    L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}{r}.png',{
       maxZoom:19,
-      attribution:'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom',
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style by <a href="https://wikimediafoundation.org/wiki/Maps_Terms_of_Use">Wikimedia</a>',
     }).addTo(map)
     gmap.current=map
     setReady(true)
