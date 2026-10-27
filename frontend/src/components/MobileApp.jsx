@@ -374,6 +374,10 @@ function TrackingScreen() {
   const myMarker=useRef(null); const myAccuracy=useRef(null)
   const [locating,setLocating]=useState(false)
   const [locErr,setLocErr]=useState('')
+  const [trafficOn,setTrafficOn]=useState(false)
+  const trafficLayer=useRef(null)
+  const placeInputRef=useRef(null)
+  const [placeQuery,setPlaceQuery]=useState('')
   const mkIcon=(status,initial)=>{
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="${sc(status)}" stroke="white" stroke-width="2"/><text x="15" y="20" font-family="system-ui" font-size="13" font-weight="700" fill="white" text-anchor="middle">${initial}</text></svg>`
     return{
@@ -384,8 +388,10 @@ function TrackingScreen() {
   }
   const initMap=()=>{
     if(!mapEl.current||gmap.current||!window.google?.maps)return
-    const map=new window.google.maps.Map(mapEl.current,{
+    const gm=window.google.maps
+    const map=new gm.Map(mapEl.current,{
       center:{lat:11.5564,lng:104.9282},zoom:13,
+      zoomControl:true, zoomControlOptions:{position:gm.ControlPosition.RIGHT_BOTTOM},
       streetViewControl:false,mapTypeControl:false,fullscreenControl:false,
     })
     gmap.current=map
@@ -400,6 +406,27 @@ function TrackingScreen() {
     if(!gmap.current)return
     gmap.current.setMapTypeId(sat?'hybrid':'roadmap')
   },[sat,ready])
+  useEffect(()=>{
+    if(!gmap.current||!window.google?.maps)return
+    if(trafficOn){
+      if(!trafficLayer.current)trafficLayer.current=new window.google.maps.TrafficLayer()
+      trafficLayer.current.setMap(gmap.current)
+    }else if(trafficLayer.current){
+      trafficLayer.current.setMap(null)
+    }
+  },[trafficOn,ready])
+  useEffect(()=>{
+    if(!ready||!placeInputRef.current||!window.google?.maps?.places)return
+    const ac=new window.google.maps.places.Autocomplete(placeInputRef.current,{fields:['geometry','name']})
+    ac.addListener('place_changed',()=>{
+      const place=ac.getPlace()
+      const loc=place?.geometry?.location
+      if(!loc||!gmap.current)return
+      gmap.current.panTo(loc); gmap.current.setZoom(15)
+      setPlaceQuery(place.name||'')
+    })
+    return()=>{window.google.maps.event.clearInstanceListeners(ac)}
+  },[ready])
   useEffect(()=>{
     if(!ready)return
     vehicles.forEach(v=>{
@@ -470,7 +497,23 @@ function TrackingScreen() {
             ))}
           </div>
         )}
+        {/* ── Place/address search (Google Places Autocomplete) ──────── */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, background:'white', borderRadius:20, padding:'9px 14px', boxShadow:'0 2px 10px rgba(0,0,0,.15)', width:'100%', maxWidth:320 }}>
+          <Search size={14} color={C.faint}/>
+          <input ref={placeInputRef} value={placeQuery} onChange={e=>setPlaceQuery(e.target.value)}
+            placeholder="Search a place…"
+            style={{ flex:1, border:'none', outline:'none', fontSize:13, color:C.navy, background:'transparent' }}/>
+          {placeQuery && <button onClick={()=>setPlaceQuery('')} style={{ background:'none', border:'none', cursor:'pointer', color:C.faint, display:'flex' }}><X size={12}/></button>}
+        </div>
       </div>
+
+      {/* ── Traffic layer toggle ────────────────────────────────────────── */}
+      {ready && (
+        <button onClick={()=>setTrafficOn(tr=>!tr)} title={trafficOn?'Traffic layer on':'Show live traffic'}
+          style={{ position:'absolute', left:14, bottom:'max(14px,env(safe-area-inset-bottom))', width:44, height:44, borderRadius:22, background:trafficOn?C.blue:'white', border:'none', boxShadow:'0 4px 16px rgba(0,0,0,.22)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', zIndex:39, fontSize:16 }}>
+          🚦
+        </button>
+      )}
 
       {/* ── Recenter-on-fleet button ──────────────────────────────────── */}
       {ready && (

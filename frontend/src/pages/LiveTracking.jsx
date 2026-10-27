@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Car, Navigation, Wifi, WifiOff, Battery, Gauge,
   MapPin, X, RefreshCw, Users, Search,
-  ChevronLeft, ChevronRight, User,
+  ChevronLeft, ChevronRight, User, Layers, LocateFixed,
 } from 'lucide-react'
 import { api } from '../api/client.js'
 import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
@@ -102,6 +102,15 @@ export default function LiveTracking() {
   const gmap       = useRef(null)
   const markers    = useRef({})
   const pulses     = useRef({})
+  const placeInputRef = useRef(null)
+  const trafficLayer  = useRef(null)
+  const myMarker       = useRef(null)
+  const myAccuracy     = useRef(null)
+  const [sat,       setSat]       = useState(false)
+  const [trafficOn, setTrafficOn] = useState(false)
+  const [locating,  setLocating]  = useState(false)
+  const [locErr,    setLocErr]    = useState('')
+  const [placeQuery,setPlaceQuery]= useState('')
 
   const fetch = useCallback(async () => {
     try {
@@ -136,9 +145,20 @@ export default function LiveTracking() {
 
   const initMap = useCallback(() => {
     if (!mapRef.current || gmap.current || !window.google?.maps) return
-    const map = new window.google.maps.Map(mapRef.current, {
+    const gm  = window.google.maps
+    const map = new gm.Map(mapRef.current, {
       center: { lat:11.5564, lng:104.9282 }, zoom: 13,
-      streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
+      // Full Google-Maps-style chrome: zoom, map-type picker, street view
+      // (pegman) and fullscreen, positioned to stay clear of our own
+      // overlays (search box top-left, selected-vehicle card bottom-right).
+      zoomControl: true,
+      zoomControlOptions:       { position: gm.ControlPosition.RIGHT_CENTER },
+      mapTypeControl: true,
+      mapTypeControlOptions:    { style: gm.MapTypeControlStyle.DROPDOWN_MENU, position: gm.ControlPosition.TOP_RIGHT },
+      streetViewControl: true,
+      streetViewControlOptions: { position: gm.ControlPosition.RIGHT_CENTER },
+      fullscreenControl: true,
+      fullscreenControlOptions: { position: gm.ControlPosition.TOP_RIGHT },
     })
     gmap.current = map
     setMapReady(true)
@@ -150,6 +170,36 @@ export default function LiveTracking() {
     return ()=>{ cancelled = true }
   }, [initMap])
   useEffect(()=>{ if(mapReady) syncMarkers(vehicles) },   [mapReady,vehicles])
+  // Map type: satellite/hybrid toggle button
+  useEffect(()=>{
+    if(!gmap.current) return
+    gmap.current.setMapTypeId(sat?'hybrid':'roadmap')
+  },[sat,mapReady])
+  // Live traffic layer toggle
+  useEffect(()=>{
+    if(!gmap.current||!window.google?.maps) return
+    if(trafficOn){
+      if(!trafficLayer.current) trafficLayer.current = new window.google.maps.TrafficLayer()
+      trafficLayer.current.setMap(gmap.current)
+    } else if(trafficLayer.current){
+      trafficLayer.current.setMap(null)
+    }
+  },[trafficOn,mapReady])
+  // Address/place search box (Google Places Autocomplete) bound to the
+  // overlay input — jumps the map to whatever place the user picks.
+  useEffect(()=>{
+    if(!mapReady||!placeInputRef.current||!window.google?.maps?.places) return
+    const ac = new window.google.maps.places.Autocomplete(placeInputRef.current, { fields:['geometry','name'] })
+    ac.addListener('place_changed', ()=>{
+      const place = ac.getPlace()
+      const loc = place?.geometry?.location
+      if(!loc||!gmap.current) return
+      gmap.current.panTo(loc)
+      gmap.current.setZoom(15)
+      setPlaceQuery(place.name||'')
+    })
+    return ()=>{ window.google.maps.event.clearInstanceListeners(ac) }
+  },[mapReady])
   useEffect(()=>{
     if(!selected) return
     const f=vehicles.find(v=>v.imei===selected.imei)
@@ -167,6 +217,31 @@ export default function LiveTracking() {
       gmap.current.panTo({ lat:parseFloat(v.lat), lng:parseFloat(v.lng) })
       gmap.current.setZoom(16)
     }
+  }
+
+  const myDotIcon = () => ({
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="rgba(27,107,181,.22)"/><circle cx="11" cy="11" r="6" fill="${T.blue}" stroke="white" stroke-width="2.5"/></svg>`),
+    scaledSize: new window.google.maps.Size(22,22),
+    anchor: new window.google.maps.Point(11,11),
+  })
+  const locateMe = () => {
+    if(!navigator.geolocation){ setLocErr('Location not supported in this browser'); return }
+    setLocating(true); setLocErr('')
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLocating(false)
+        const loc = { lat:pos.coords.latitude, lng:pos.coords.longitude }
+        if(gmap.current){
+          if(myMarker.current) myMarker.current.setPosition(loc)
+          else myMarker.current = new window.google.maps.Marker({ position:loc, map:gmap.current, icon:myDotIcon(), title:'Your location', zIndex:999 })
+          if(myAccuracy.current){ myAccuracy.current.setCenter(loc); myAccuracy.current.setRadius(pos.coords.accuracy||30) }
+          else myAccuracy.current = new window.google.maps.Circle({ center:loc, radius:pos.coords.accuracy||30, map:gmap.current, fillColor:T.blue, fillOpacity:.1, strokeColor:T.blue, strokeOpacity:.3, strokeWeight:1 })
+          gmap.current.panTo(loc); gmap.current.setZoom(16)
+        }
+      },
+      err => { setLocating(false); setLocErr(err.code===1?'Location permission denied':'Could not get your location') },
+      { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+    )
   }
 
   const list    = vehicles.filter(v=>(filter==='all'||v.status===filter)&&(!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.toLowerCase().includes(search.toLowerCase())||v.owner?.toLowerCase().includes(search.toLowerCase())))
@@ -378,6 +453,41 @@ export default function LiveTracking() {
           style={{ position:'absolute', top:'50%', left:12, transform:'translateY(-50%)', zIndex:40, width:22, height:50, borderRadius:9, background:'white', border:'1px solid '+T.border, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:T.muted, boxShadow:'0 2px 10px rgba(0,0,0,.1)' }}>
           {open ? <ChevronLeft size={14}/> : <ChevronRight size={14}/>}
         </button>
+
+        {/* ── Google-Maps-style place/address search ─────────────── */}
+        <div style={{ position:'absolute', top:16, left:46, zIndex:40, width:320, display:'flex', alignItems:'center', gap:8, background:'white', borderRadius:10, padding:'10px 14px', boxShadow:'0 2px 12px rgba(0,0,0,.18)' }}>
+          <Search size={15} color={T.faint}/>
+          <input ref={placeInputRef} value={placeQuery} onChange={e=>setPlaceQuery(e.target.value)}
+            placeholder="Search a place or address…"
+            style={{ flex:1, border:'none', outline:'none', fontSize:13, color:T.navy, background:'transparent' }}/>
+          {placeQuery && <button onClick={()=>setPlaceQuery('')} style={{ background:'none', border:'none', cursor:'pointer', color:T.faint, display:'flex' }}><X size={13}/></button>}
+        </div>
+
+        {/* ── Satellite / traffic / my-location controls ──────────── */}
+        {mapReady && (
+          <div style={{ position:'absolute', left:16, bottom:20, zIndex:40, display:'flex', flexDirection:'column', gap:8 }}>
+            <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
+              style={{ width:42, height:42, borderRadius:10, border:'none', background:sat?T.blue:'white', color:sat?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              <Layers size={17}/>
+            </button>
+            <button onClick={()=>setTrafficOn(t=>!t)} title={trafficOn?'Traffic layer on':'Show live traffic'}
+              style={{ width:42, height:42, borderRadius:10, border:'none', background:trafficOn?T.blue:'white', color:trafficOn?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>
+              🚦
+            </button>
+            <button onClick={locateMe} title="Show my location"
+              style={{ width:42, height:42, borderRadius:10, border:'none', background:'white', color:T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              {locating
+                ? <div style={{ width:16, height:16, borderRadius:'50%', border:'2px solid #BFDBFE', borderTopColor:T.blue, animation:'kvhSpin .7s linear infinite' }}/>
+                : <LocateFixed size={17}/>}
+            </button>
+          </div>
+        )}
+        {locErr && (
+          <div onClick={()=>setLocErr('')}
+            style={{ position:'absolute', bottom:20, left:'50%', transform:'translateX(-50%)', zIndex:50, background:T.navy, color:'white', borderRadius:10, padding:'10px 16px', fontSize:13, boxShadow:'0 4px 16px rgba(0,0,0,.3)', cursor:'pointer' }}>
+            {locErr}
+          </div>
+        )}
 
         {/* ── Selected vehicle card ─────────────────────── */}
         {selected && (() => {
