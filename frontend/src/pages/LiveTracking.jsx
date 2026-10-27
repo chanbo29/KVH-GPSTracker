@@ -102,15 +102,11 @@ export default function LiveTracking() {
   const gmap       = useRef(null)
   const markers    = useRef({})
   const pulses     = useRef({})
-  const placeInputRef = useRef(null)
-  const trafficLayer  = useRef(null)
-  const myMarker       = useRef(null)
-  const myAccuracy     = useRef(null)
+  const myMarker    = useRef(null)
+  const myAccuracy  = useRef(null)
   const [sat,       setSat]       = useState(false)
-  const [trafficOn, setTrafficOn] = useState(false)
   const [locating,  setLocating]  = useState(false)
   const [locErr,    setLocErr]    = useState('')
-  const [placeQuery,setPlaceQuery]= useState('')
 
   const fetch = useCallback(async () => {
     try {
@@ -145,20 +141,9 @@ export default function LiveTracking() {
 
   const initMap = useCallback(() => {
     if (!mapRef.current || gmap.current || !window.google?.maps) return
-    const gm  = window.google.maps
-    const map = new gm.Map(mapRef.current, {
+    const map = new window.google.maps.Map(mapRef.current, {
       center: { lat:11.5564, lng:104.9282 }, zoom: 13,
-      // Full Google-Maps-style chrome: zoom, map-type picker, street view
-      // (pegman) and fullscreen, positioned to stay clear of our own
-      // overlays (search box top-left, selected-vehicle card bottom-right).
-      zoomControl: true,
-      zoomControlOptions:       { position: gm.ControlPosition.RIGHT_CENTER },
-      mapTypeControl: true,
-      mapTypeControlOptions:    { style: gm.MapTypeControlStyle.DROPDOWN_MENU, position: gm.ControlPosition.TOP_RIGHT },
-      streetViewControl: true,
-      streetViewControlOptions: { position: gm.ControlPosition.RIGHT_CENTER },
-      fullscreenControl: true,
-      fullscreenControlOptions: { position: gm.ControlPosition.TOP_RIGHT },
+      streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
     })
     gmap.current = map
     setMapReady(true)
@@ -175,31 +160,6 @@ export default function LiveTracking() {
     if(!gmap.current) return
     gmap.current.setMapTypeId(sat?'hybrid':'roadmap')
   },[sat,mapReady])
-  // Live traffic layer toggle
-  useEffect(()=>{
-    if(!gmap.current||!window.google?.maps) return
-    if(trafficOn){
-      if(!trafficLayer.current) trafficLayer.current = new window.google.maps.TrafficLayer()
-      trafficLayer.current.setMap(gmap.current)
-    } else if(trafficLayer.current){
-      trafficLayer.current.setMap(null)
-    }
-  },[trafficOn,mapReady])
-  // Address/place search box (Google Places Autocomplete) bound to the
-  // overlay input — jumps the map to whatever place the user picks.
-  useEffect(()=>{
-    if(!mapReady||!placeInputRef.current||!window.google?.maps?.places) return
-    const ac = new window.google.maps.places.Autocomplete(placeInputRef.current, { fields:['geometry','name'] })
-    ac.addListener('place_changed', ()=>{
-      const place = ac.getPlace()
-      const loc = place?.geometry?.location
-      if(!loc||!gmap.current) return
-      gmap.current.panTo(loc)
-      gmap.current.setZoom(15)
-      setPlaceQuery(place.name||'')
-    })
-    return ()=>{ window.google.maps.event.clearInstanceListeners(ac) }
-  },[mapReady])
   useEffect(()=>{
     if(!selected) return
     const f=vehicles.find(v=>v.imei===selected.imei)
@@ -454,25 +414,12 @@ export default function LiveTracking() {
           {open ? <ChevronLeft size={14}/> : <ChevronRight size={14}/>}
         </button>
 
-        {/* ── Google-Maps-style place/address search ─────────────── */}
-        <div style={{ position:'absolute', top:16, left:46, zIndex:40, width:320, display:'flex', alignItems:'center', gap:8, background:'white', borderRadius:10, padding:'10px 14px', boxShadow:'0 2px 12px rgba(0,0,0,.18)' }}>
-          <Search size={15} color={T.faint}/>
-          <input ref={placeInputRef} value={placeQuery} onChange={e=>setPlaceQuery(e.target.value)}
-            placeholder="Search a place or address…"
-            style={{ flex:1, border:'none', outline:'none', fontSize:13, color:T.navy, background:'transparent' }}/>
-          {placeQuery && <button onClick={()=>setPlaceQuery('')} style={{ background:'none', border:'none', cursor:'pointer', color:T.faint, display:'flex' }}><X size={13}/></button>}
-        </div>
-
-        {/* ── Satellite / traffic / my-location controls ──────────── */}
+        {/* ── Satellite / my-location controls ──────────── */}
         {mapReady && (
           <div style={{ position:'absolute', left:16, bottom:20, zIndex:40, display:'flex', flexDirection:'column', gap:8 }}>
             <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
               style={{ width:42, height:42, borderRadius:10, border:'none', background:sat?T.blue:'white', color:sat?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
               <Layers size={17}/>
-            </button>
-            <button onClick={()=>setTrafficOn(t=>!t)} title={trafficOn?'Traffic layer on':'Show live traffic'}
-              style={{ width:42, height:42, borderRadius:10, border:'none', background:trafficOn?T.blue:'white', color:trafficOn?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>
-              🚦
             </button>
             <button onClick={locateMe} title="Show my location"
               style={{ width:42, height:42, borderRadius:10, border:'none', background:'white', color:T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>

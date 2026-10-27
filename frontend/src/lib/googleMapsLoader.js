@@ -15,9 +15,7 @@ export function loadGoogleMaps() {
     }
     window.__kvhGmapsInit = () => resolve(window.google.maps)
     const s = document.createElement('script')
-    // libraries=places → address/place search (Autocomplete) on both the
-    // desktop and mobile tracking maps.
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=__kvhGmapsInit`
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&callback=__kvhGmapsInit`
     s.async = true
     s.defer = true
     s.onerror = () => reject(new Error('Failed to load Google Maps script'))
