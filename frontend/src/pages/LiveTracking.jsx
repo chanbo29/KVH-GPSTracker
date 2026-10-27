@@ -4,9 +4,8 @@ import {
   MapPin, X, RefreshCw, Users, Search,
   ChevronLeft, ChevronRight, User,
 } from 'lucide-react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 import { api } from '../api/client.js'
+import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
 
 const T = {
   sidebarBg: '#FFFFFF',
@@ -35,47 +34,58 @@ const STATUS = {
 const st = s => STATUS[s] || STATUS.offline
 
 function animateMarker(marker, lat, lng, ms = 900) {
-  const cur  = marker.getLatLng()
-  const from = { lat: cur.lat, lng: cur.lng }
+  const cur  = marker.getPosition()
+  const from = { lat: cur.lat(), lng: cur.lng() }
   const t0   = performance.now()
   const ease = t => t < .5 ? 2*t*t : -1+(4-2*t)*t
   const step = now => {
     const p = Math.min((now-t0)/ms, 1)
-    marker.setLatLng([from.lat+(lat-from.lat)*ease(p), from.lng+(lng-from.lng)*ease(p)])
+    marker.setPosition({ lat: from.lat+(lat-from.lat)*ease(p), lng: from.lng+(lng-from.lng)*ease(p) })
     if (p < 1) requestAnimationFrame(step)
   }
   requestAnimationFrame(step)
 }
 
-// Arrow-shaped div icon, rotated to the vehicle's heading — replaces the
-// Google Maps FORWARD_CLOSED_ARROW symbol with a free Leaflet equivalent.
-function mkDivIcon(status, course = 0) {
+// Arrow-shaped marker icon, rotated to the vehicle's heading via an SVG
+// `transform="rotate(...)"` attribute (works reliably even as a standalone
+// data-URI image, unlike a CSS transform on the root <svg>).
+function mkIcon(status, course = 0) {
   const color = st(status).color
   const size  = status === 'moving' ? 26 : 20
-  return L.divIcon({
-    className: 'kvh-vehicle-marker',
-    html: `<div style="width:${size}px;height:${size}px;transform:rotate(${course}deg);transform-origin:center;">
-      <svg width="${size}" height="${size}" viewBox="0 0 24 24" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))">
-        <path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/>
-      </svg>
-    </div>`,
-    iconSize:   [size, size],
-    iconAnchor: [size / 2, size / 2],
-  })
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
+    <g transform="rotate(${course} 12 12)">
+      <path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+    </g>
+  </svg>`
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new window.google.maps.Size(size, size),
+    anchor: new window.google.maps.Point(size / 2, size / 2),
+  }
 }
 
-// Pulsing green ring behind a moving vehicle — reuses the kvhP keyframe
-// already defined in this file's <style> block.
-function pulseDivIcon() {
-  return L.divIcon({
-    className: 'kvh-pulse-marker',
-    html: `<div style="position:relative;width:44px;height:44px">
-      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(22,163,74,.2);animation:kvhP 1.8s ease-out infinite"></div>
-      <div style="position:absolute;inset:10px;border-radius:50%;background:rgba(22,163,74,.14);animation:kvhP 1.8s ease-out infinite .6s"></div>
-    </div>`,
-    iconSize:   [44, 44],
-    iconAnchor: [22, 22],
+// Pulsing green ring behind a moving vehicle — a google.maps.Circle whose
+// radius/opacity we animate manually (CSS keyframes don't apply to Maps'
+// canvas-rendered overlays like they did to Leaflet's DOM-based markers).
+function makePulse(map, lat, lng) {
+  const circle = new window.google.maps.Circle({
+    map, center: { lat, lng }, radius: 15,
+    fillColor: '#16A34A', fillOpacity: 0.22, strokeOpacity: 0, clickable: false, zIndex: 1,
   })
+  const t0 = performance.now()
+  const DUR = 1800
+  let raf
+  const tick = now => {
+    const p = ((now - t0) % DUR) / DUR
+    circle.setRadius(15 + p * 55)
+    circle.setOptions({ fillOpacity: 0.22 * (1 - p) })
+    raf = requestAnimationFrame(tick)
+  }
+  raf = requestAnimationFrame(tick)
+  return {
+    setCenter: (lat, lng) => circle.setCenter({ lat, lng }),
+    stop: () => { cancelAnimationFrame(raf); circle.setMap(null) },
+  }
 }
 
 export default function LiveTracking() {
@@ -101,41 +111,44 @@ export default function LiveTracking() {
   }, [])
 
   const syncMarkers = useCallback((data) => {
-    if (!gmap.current) return
+    if (!gmap.current || !window.google?.maps) return
     data.forEach(v => {
       const lat = parseFloat(v.lat||0), lng = parseFloat(v.lng||0)
       if (!lat && !lng) return
       const isMoving = v.status === 'moving'
-      const icon     = mkDivIcon(v.status, v.course||0)
+      const icon     = mkIcon(v.status, v.course||0)
       if (markers.current[v.imei]) {
         animateMarker(markers.current[v.imei], lat, lng)
         markers.current[v.imei].setIcon(icon)
       } else {
-        const m = L.marker([lat,lng], { icon, title:v.name }).addTo(gmap.current)
-        m.on('click', ()=>{ setSelected(v); gmap.current.flyTo([lat,lng], 16) })
+        const m = new window.google.maps.Marker({ position:{lat,lng}, map:gmap.current, icon, title:v.name })
+        m.addListener('click', ()=>{ setSelected(v); gmap.current.panTo({lat,lng}); gmap.current.setZoom(16) })
         markers.current[v.imei] = m
       }
       if (isMoving) {
-        if (pulses.current[v.imei]) pulses.current[v.imei].setLatLng([lat,lng])
-        else pulses.current[v.imei] = L.marker([lat,lng], { icon:pulseDivIcon(), interactive:false, zIndexOffset:-1000 }).addTo(gmap.current)
+        if (pulses.current[v.imei]) pulses.current[v.imei].setCenter(lat,lng)
+        else pulses.current[v.imei] = makePulse(gmap.current, lat, lng)
       } else if (!isMoving && pulses.current[v.imei]) {
-        gmap.current.removeLayer(pulses.current[v.imei]); delete pulses.current[v.imei]
+        pulses.current[v.imei].stop(); delete pulses.current[v.imei]
       }
     })
   }, [])
 
   const initMap = useCallback(() => {
-    if (!mapRef.current || gmap.current) return
-    const map = L.map(mapRef.current, { center:[11.5564,104.9282], zoom:13, zoomControl:true })
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map)
+    if (!mapRef.current || gmap.current || !window.google?.maps) return
+    const map = new window.google.maps.Map(mapRef.current, {
+      center: { lat:11.5564, lng:104.9282 }, zoom: 13,
+      streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
+    })
     gmap.current = map
     setMapReady(true)
   }, [])
 
-  useEffect(()=>{ initMap() },                            [initMap])
+  useEffect(()=>{
+    let cancelled = false
+    loadGoogleMaps().then(()=>{ if(!cancelled) initMap() }).catch(err=>console.error(err))
+    return ()=>{ cancelled = true }
+  }, [initMap])
   useEffect(()=>{ if(mapReady) syncMarkers(vehicles) },   [mapReady,vehicles])
   useEffect(()=>{
     if(!selected) return
@@ -150,8 +163,10 @@ export default function LiveTracking() {
 
   const focus = v => {
     setSelected(v)
-    if(gmap.current&&v.lat&&parseFloat(v.lat)!==0)
-      gmap.current.flyTo([parseFloat(v.lat),parseFloat(v.lng)], 16)
+    if(gmap.current&&v.lat&&parseFloat(v.lat)!==0){
+      gmap.current.panTo({ lat:parseFloat(v.lat), lng:parseFloat(v.lng) })
+      gmap.current.setZoom(16)
+    }
   }
 
   const list    = vehicles.filter(v=>(filter==='all'||v.status===filter)&&(!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.toLowerCase().includes(search.toLowerCase())||v.owner?.toLowerCase().includes(search.toLowerCase())))
