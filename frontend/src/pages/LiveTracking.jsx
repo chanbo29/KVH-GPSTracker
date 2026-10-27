@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Car, Navigation, Wifi, WifiOff, Battery, Gauge,
   MapPin, X, RefreshCw, Users, Search,
-  ChevronLeft, ChevronRight, User, Layers, LocateFixed,
+  ChevronLeft, ChevronRight, User, Layers,
 } from 'lucide-react'
 import { api } from '../api/client.js'
 import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
@@ -102,11 +102,7 @@ export default function LiveTracking() {
   const gmap       = useRef(null)
   const markers    = useRef({})
   const pulses     = useRef({})
-  const myMarker    = useRef(null)
-  const myAccuracy  = useRef(null)
   const [sat,       setSat]       = useState(false)
-  const [locating,  setLocating]  = useState(false)
-  const [locErr,    setLocErr]    = useState('')
 
   const fetch = useCallback(async () => {
     try {
@@ -177,31 +173,6 @@ export default function LiveTracking() {
       gmap.current.panTo({ lat:parseFloat(v.lat), lng:parseFloat(v.lng) })
       gmap.current.setZoom(16)
     }
-  }
-
-  const myDotIcon = () => ({
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="rgba(27,107,181,.22)"/><circle cx="11" cy="11" r="6" fill="${T.blue}" stroke="white" stroke-width="2.5"/></svg>`),
-    scaledSize: new window.google.maps.Size(22,22),
-    anchor: new window.google.maps.Point(11,11),
-  })
-  const locateMe = () => {
-    if(!navigator.geolocation){ setLocErr('Location not supported in this browser'); return }
-    setLocating(true); setLocErr('')
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        setLocating(false)
-        const loc = { lat:pos.coords.latitude, lng:pos.coords.longitude }
-        if(gmap.current){
-          if(myMarker.current) myMarker.current.setPosition(loc)
-          else myMarker.current = new window.google.maps.Marker({ position:loc, map:gmap.current, icon:myDotIcon(), title:'Your location', zIndex:999 })
-          if(myAccuracy.current){ myAccuracy.current.setCenter(loc); myAccuracy.current.setRadius(pos.coords.accuracy||30) }
-          else myAccuracy.current = new window.google.maps.Circle({ center:loc, radius:pos.coords.accuracy||30, map:gmap.current, fillColor:T.blue, fillOpacity:.1, strokeColor:T.blue, strokeOpacity:.3, strokeWeight:1 })
-          gmap.current.panTo(loc); gmap.current.setZoom(16)
-        }
-      },
-      err => { setLocating(false); setLocErr(err.code===1?'Location permission denied':'Could not get your location') },
-      { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
-    )
   }
 
   const list    = vehicles.filter(v=>(filter==='all'||v.status===filter)&&(!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.toLowerCase().includes(search.toLowerCase())||v.owner?.toLowerCase().includes(search.toLowerCase())))
@@ -414,26 +385,12 @@ export default function LiveTracking() {
           {open ? <ChevronLeft size={14}/> : <ChevronRight size={14}/>}
         </button>
 
-        {/* ── Satellite / my-location controls ──────────── */}
+        {/* ── Satellite toggle ──────────────────────────── */}
         {mapReady && (
-          <div style={{ position:'absolute', left:16, bottom:20, zIndex:40, display:'flex', flexDirection:'column', gap:8 }}>
-            <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
-              style={{ width:42, height:42, borderRadius:10, border:'none', background:sat?T.blue:'white', color:sat?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-              <Layers size={17}/>
-            </button>
-            <button onClick={locateMe} title="Show my location"
-              style={{ width:42, height:42, borderRadius:10, border:'none', background:'white', color:T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-              {locating
-                ? <div style={{ width:16, height:16, borderRadius:'50%', border:'2px solid #BFDBFE', borderTopColor:T.blue, animation:'kvhSpin .7s linear infinite' }}/>
-                : <LocateFixed size={17}/>}
-            </button>
-          </div>
-        )}
-        {locErr && (
-          <div onClick={()=>setLocErr('')}
-            style={{ position:'absolute', bottom:20, left:'50%', transform:'translateX(-50%)', zIndex:50, background:T.navy, color:'white', borderRadius:10, padding:'10px 16px', fontSize:13, boxShadow:'0 4px 16px rgba(0,0,0,.3)', cursor:'pointer' }}>
-            {locErr}
-          </div>
+          <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
+            style={{ position:'absolute', left:16, bottom:20, zIndex:40, width:42, height:42, borderRadius:10, border:'none', background:sat?T.blue:'white', color:sat?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            <Layers size={17}/>
+          </button>
         )}
 
         {/* ── Selected vehicle card ─────────────────────── */}
