@@ -136,7 +136,7 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
   }
 
   return (
-    <div style={{ position:'relative', width: collapsed ? 72 : 240, minWidth: collapsed ? 72 : 240, flexShrink:0, height:'100vh', transition: `width .24s ${EASE}, min-width .24s ${EASE}` }}>
+    <div style={{ position:'relative', width: collapsed ? 72 : 240, minWidth: collapsed ? 72 : 240, flexShrink:0, zIndex:10, height:'100vh', transition: `width .24s ${EASE}, min-width .24s ${EASE}` }}>
       <style>{`@keyframes kvhLivePulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 6px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}`}</style>
       <div style={{
         width:'100%', height:'100%',
@@ -228,7 +228,7 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
           position:'absolute', top:24, right:-12, width:24, height:24, borderRadius:'50%',
           background:C.sidebar, border:`1px solid ${HAIRLINE}`, color:'#7E8CA3',
           display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer',
-          boxShadow:'0 2px 8px rgba(0,0,0,.3)', zIndex:5,
+          boxShadow:'0 2px 8px rgba(0,0,0,.3)', zIndex:50,
           transition: `background .15s ${EASE}, color .15s ${EASE}, border-color .15s ${EASE}`,
         }}
         onMouseEnter={e => { e.currentTarget.style.background='#1E293B'; e.currentTarget.style.color=ACCENT; e.currentTarget.style.borderColor='rgba(242,169,59,.35)' }}

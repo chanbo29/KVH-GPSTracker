@@ -127,9 +127,9 @@ export default function LiveTracking() {
   const initMap = useCallback(() => {
     if (!mapRef.current || gmap.current) return
     const map = L.map(mapRef.current, { center:[11.5564,104.9282], zoom:13, zoomControl:true })
-    L.tileLayer('https://maps.wikimedia.org/osm-intl/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, style by <a href="https://wikimediafoundation.org/wiki/Maps_Terms_of_Use">Wikimedia</a>',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map)
     gmap.current = map
     setMapReady(true)

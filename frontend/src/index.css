@@ -7,3 +7,8 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 input, select, button { font-family: inherit; }
 .gm-style .gm-style-iw-c { border-radius: 12px !important; padding: 0 !important; }
 .gm-style .gm-style-iw-d { overflow: hidden !important; }
+
+/* Desaturate the OSM tile layer for a cleaner, less busy, more Google-Maps-like look */
+.leaflet-tile-pane {
+  filter: saturate(0.6) brightness(1.1) contrast(0.95);
+}
