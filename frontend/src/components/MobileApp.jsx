@@ -7,7 +7,7 @@ import {
   Phone, Play, Pause, SkipBack, SkipForward,
   Eye, EyeOff, BarChart2, Cpu, Hexagon, Settings,
   Wrench, Droplets, CheckCircle, AlertCircle,
-  Languages, Edit, Users, Layers,
+  Languages, Edit, Users, Layers, LocateFixed,
 } from 'lucide-react'
 import { useApi } from '../hooks/useApi.js'
 import { api }    from '../api/client.js'
@@ -371,6 +371,9 @@ function TrackingScreen() {
   const stopped = vehicles.filter(v=>v.status==='stopped').length
   const offline = vehicles.filter(v=>v.status==='offline').length
   const [sat,setSat]=useState(false)
+  const myMarker=useRef(null); const myAccuracy=useRef(null)
+  const [locating,setLocating]=useState(false)
+  const [locErr,setLocErr]=useState('')
   const mkIcon=(status,initial)=>{
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="${sc(status)}" stroke="white" stroke-width="2"/><text x="15" y="20" font-family="system-ui" font-size="13" font-weight="700" fill="white" text-anchor="middle">${initial}</text></svg>`
     return{
@@ -417,6 +420,30 @@ function TrackingScreen() {
     pts.forEach(v=>bounds.extend({lat:v.lat,lng:v.lng}))
     gmap.current.fitBounds(bounds,64)
   }
+  const myDotIcon=()=>({
+    url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" fill="rgba(27,107,181,.22)"/><circle cx="11" cy="11" r="6" fill="${C.blue}" stroke="white" stroke-width="2.5"/></svg>`),
+    scaledSize:new window.google.maps.Size(22,22),
+    anchor:new window.google.maps.Point(11,11),
+  })
+  const locateMe=()=>{
+    if(!navigator.geolocation){setLocErr('Location not supported on this device');return}
+    setLocating(true); setLocErr('')
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        setLocating(false)
+        const loc={lat:pos.coords.latitude,lng:pos.coords.longitude}
+        if(gmap.current){
+          if(myMarker.current){myMarker.current.setPosition(loc)}
+          else{myMarker.current=new window.google.maps.Marker({position:loc,map:gmap.current,icon:myDotIcon(),title:'Your location',zIndex:999})}
+          if(myAccuracy.current){myAccuracy.current.setCenter(loc);myAccuracy.current.setRadius(pos.coords.accuracy||30)}
+          else{myAccuracy.current=new window.google.maps.Circle({center:loc,radius:pos.coords.accuracy||30,map:gmap.current,fillColor:C.blue,fillOpacity:.1,strokeColor:C.blue,strokeOpacity:.3,strokeWeight:1})}
+          gmap.current.panTo(loc); gmap.current.setZoom(16)
+        }
+      },
+      err=>{ setLocating(false); setLocErr(err.code===1?'Location permission denied':'Could not get your location') },
+      { enableHighAccuracy:true, timeout:10000, maximumAge:0 }
+    )
+  }
   const openFilter=key=>{setSheetFilter(key);setSearch('');setSel(null);setSheet(true)}
   return (
     <div style={{ position:'relative', flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
@@ -459,6 +486,20 @@ function TrackingScreen() {
           style={{ position:'absolute', right:14, bottom: sel && !sheet ? 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 222px)' : 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 70px)', width:46, height:46, borderRadius:23, background:sat?C.blue:'white', border:'none', boxShadow:'0 4px 16px rgba(0,0,0,.22)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', zIndex:39, transition:'bottom .2s ease' }}>
           <Layers size={19} color={sat?'white':C.blue}/>
         </button>
+      )}
+
+      {/* ── My-location button ──────────────────────────────────────────── */}
+      {ready && (
+        <button onClick={locateMe} title="Show my location"
+          style={{ position:'absolute', right:14, bottom: sel && !sheet ? 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 276px)' : 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 124px)', width:46, height:46, borderRadius:23, background:'white', border:'none', boxShadow:'0 4px 16px rgba(0,0,0,.22)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', zIndex:39, transition:'bottom .2s ease' }}>
+          {locating ? <Spinner size={18} color={C.blue}/> : <LocateFixed size={19} color={C.blue}/>}
+        </button>
+      )}
+      {locErr && (
+        <div style={{ position:'absolute', bottom:'max(14px,env(safe-area-inset-bottom))', left:12, right:12, zIndex:60, background:C.navy, color:'white', borderRadius:10, padding:'10px 14px', fontSize:13, textAlign:'center', boxShadow:'0 4px 16px rgba(0,0,0,.3)' }}
+          onClick={()=>setLocErr('')}>
+          {locErr}
+        </div>
       )}
 
       {/* ── Selected vehicle card ─────────────────────────────────────── */}
