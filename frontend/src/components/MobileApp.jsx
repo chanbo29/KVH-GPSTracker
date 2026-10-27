@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 import {
   Home, Map, Car, Bell, MoreHorizontal, LogOut,
   ChevronRight, ChevronLeft, Navigation, Wifi, WifiOff,
@@ -9,11 +7,12 @@ import {
   Phone, Play, Pause, SkipBack, SkipForward,
   Eye, EyeOff, BarChart2, Cpu, Hexagon, Settings,
   Wrench, Droplets, CheckCircle, AlertCircle,
-  Languages, Edit, Users,
+  Languages, Edit, Users, Layers,
 } from 'lucide-react'
 import { useApi } from '../hooks/useApi.js'
 import { api }    from '../api/client.js'
 import { t }      from '../constants/i18n.js'
+import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
 
 const C = {
   bg:     '#F1F5F9',
@@ -371,41 +370,52 @@ function TrackingScreen() {
   const moving  = vehicles.filter(v=>v.status==='moving').length
   const stopped = vehicles.filter(v=>v.status==='stopped').length
   const offline = vehicles.filter(v=>v.status==='offline').length
-  const mkIcon=(status,initial)=>L.divIcon({
-    className:'kvh-mobile-marker',
-    html:`<div style="width:30px;height:30px;border-radius:50%;background:${sc(status)};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:13px;">${initial}</div>`,
-    iconSize:[30,30],
-    iconAnchor:[15,15],
-  })
+  const [sat,setSat]=useState(false)
+  const mkIcon=(status,initial)=>{
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="${sc(status)}" stroke="white" stroke-width="2"/><text x="15" y="20" font-family="system-ui" font-size="13" font-weight="700" fill="white" text-anchor="middle">${initial}</text></svg>`
+    return{
+      url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),
+      scaledSize:new window.google.maps.Size(30,30),
+      anchor:new window.google.maps.Point(15,15),
+    }
+  }
   const initMap=()=>{
-    if(!mapEl.current||gmap.current)return
-    const map=L.map(mapEl.current,{center:[11.5564,104.9282],zoom:13,zoomControl:true})
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      maxZoom:19,
-      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map)
+    if(!mapEl.current||gmap.current||!window.google?.maps)return
+    const map=new window.google.maps.Map(mapEl.current,{
+      center:{lat:11.5564,lng:104.9282},zoom:13,
+      streetViewControl:false,mapTypeControl:false,fullscreenControl:false,
+    })
     gmap.current=map
     setReady(true)
   }
-  useEffect(()=>{initMap()},[])
+  useEffect(()=>{
+    let cancelled=false
+    loadGoogleMaps().then(()=>{if(!cancelled)initMap()}).catch(err=>console.error(err))
+    return()=>{cancelled=true}
+  },[])
+  useEffect(()=>{
+    if(!gmap.current)return
+    gmap.current.setMapTypeId(sat?'hybrid':'roadmap')
+  },[sat,ready])
   useEffect(()=>{
     if(!ready)return
     vehicles.forEach(v=>{
       if(!v.lat||!v.lng)return
-      if(marks.current[v.imei]){marks.current[v.imei].setLatLng([v.lat,v.lng]);return}
-      const m=L.marker([v.lat,v.lng],{icon:mkIcon(v.status,dName(v).charAt(0).toUpperCase()),title:dName(v)+' · '+v.plate}).addTo(gmap.current)
-      m.on('click',()=>{setSel(v);setSheet(false)})
+      if(marks.current[v.imei]){marks.current[v.imei].setPosition({lat:v.lat,lng:v.lng});return}
+      const m=new window.google.maps.Marker({position:{lat:v.lat,lng:v.lng},map:gmap.current,icon:mkIcon(v.status,dName(v).charAt(0).toUpperCase()),title:dName(v)+' · '+v.plate})
+      m.addListener('click',()=>{setSel(v);setSheet(false)})
       marks.current[v.imei]=m
     })
   },[vehicles,ready])
-  const panTo=v=>{setSel(v);setSheet(false);if(gmap.current&&v.lat&&v.lng){gmap.current.flyTo([v.lat,v.lng],16)}}
+  const panTo=v=>{setSel(v);setSheet(false);if(gmap.current&&v.lat&&v.lng){gmap.current.panTo({lat:v.lat,lng:v.lng});gmap.current.setZoom(16)}}
   const fitAll=()=>{
     if(!gmap.current)return
     const pts=vehicles.filter(v=>v.lat&&v.lng)
     if(!pts.length)return
-    if(pts.length===1){gmap.current.flyTo([pts[0].lat,pts[0].lng],16);return}
-    const bounds=L.latLngBounds(pts.map(v=>[v.lat,v.lng]))
-    gmap.current.fitBounds(bounds,{padding:[64,64]})
+    if(pts.length===1){gmap.current.panTo({lat:pts[0].lat,lng:pts[0].lng});gmap.current.setZoom(16);return}
+    const bounds=new window.google.maps.LatLngBounds()
+    pts.forEach(v=>bounds.extend({lat:v.lat,lng:v.lng}))
+    gmap.current.fitBounds(bounds,64)
   }
   const openFilter=key=>{setSheetFilter(key);setSearch('');setSel(null);setSheet(true)}
   return (
@@ -440,6 +450,14 @@ function TrackingScreen() {
         <button onClick={fitAll} title={t('mobile.map')}
           style={{ position:'absolute', right:14, bottom: sel && !sheet ? 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 168px)' : 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 16px)', width:46, height:46, borderRadius:23, background:'white', border:'none', boxShadow:'0 4px 16px rgba(0,0,0,.22)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', zIndex:39, transition:'bottom .2s ease' }}>
           <Navigation size={19} color={C.blue}/>
+        </button>
+      )}
+
+      {/* ── Satellite/roadmap toggle ───────────────────────────────────── */}
+      {ready && (
+        <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
+          style={{ position:'absolute', right:14, bottom: sel && !sheet ? 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 222px)' : 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 70px)', width:46, height:46, borderRadius:23, background:sat?C.blue:'white', border:'none', boxShadow:'0 4px 16px rgba(0,0,0,.22)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', zIndex:39, transition:'bottom .2s ease' }}>
+          <Layers size={19} color={sat?'white':C.blue}/>
         </button>
       )}
 
@@ -1089,44 +1107,60 @@ function HistoryScreen({ onBack }) {
   const [playing, setPlaying] = useState(false)
   const [ready,   setReady]   = useState(false)
   const mapEl=useRef(null); const gmap=useRef(null); const marker=useRef(null); const poly=useRef(null); const endpoints=useRef([]); const timer=useRef(null)
-  const dotIcon=(label,color)=>L.divIcon({
-    className:'kvh-hist-dot',
-    html:`<div style="width:24px;height:24px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:12px;">${label}</div>`,
-    iconSize:[24,24], iconAnchor:[12,12],
-  })
-  const playIcon=L.divIcon({
-    className:'kvh-hist-marker',
-    html:`<div style="width:22px;height:22px;"><svg width="22" height="22" viewBox="0 0 24 24" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))"><path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${C.blue}" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg></div>`,
-    iconSize:[22,22], iconAnchor:[11,11],
-  })
+  const [sat,setSat]=useState(false)
+  const dotIcon=(label,color)=>{
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="${color}" stroke="white" stroke-width="2"/><text x="12" y="16" font-family="system-ui" font-size="12" font-weight="700" fill="white" text-anchor="middle">${label}</text></svg>`
+    return{
+      url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),
+      scaledSize:new window.google.maps.Size(24,24),
+      anchor:new window.google.maps.Point(12,12),
+    }
+  }
+  const playIcon=()=>{
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))"><path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${C.blue}" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>`
+    return{
+      url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),
+      scaledSize:new window.google.maps.Size(22,22),
+      anchor:new window.google.maps.Point(11,11),
+    }
+  }
   const initMap=()=>{
-    if(!mapEl.current||gmap.current)return
-    const map=L.map(mapEl.current,{center:[11.5564,104.9282],zoom:13,zoomControl:true})
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      maxZoom:19,
-      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map)
+    if(!mapEl.current||gmap.current||!window.google?.maps)return
+    const map=new window.google.maps.Map(mapEl.current,{
+      center:{lat:11.5564,lng:104.9282},zoom:13,
+      streetViewControl:false,mapTypeControl:false,fullscreenControl:false,
+    })
     gmap.current=map
     setReady(true)
   }
-  useEffect(()=>{initMap()},[])
+  useEffect(()=>{
+    let cancelled=false
+    loadGoogleMaps().then(()=>{if(!cancelled)initMap()}).catch(err=>console.error(err))
+    return()=>{cancelled=true}
+  },[])
+  useEffect(()=>{
+    if(!gmap.current)return
+    gmap.current.setMapTypeId(sat?'hybrid':'roadmap')
+  },[sat,ready])
   const draw=pts=>{
     if(!gmap.current||!pts.length)return
-    if(poly.current)gmap.current.removeLayer(poly.current)
-    if(marker.current)gmap.current.removeLayer(marker.current)
-    endpoints.current.forEach(m=>gmap.current.removeLayer(m)); endpoints.current=[]
-    const latlngs=pts.map(p=>[p.lat,p.lng])
-    poly.current=L.polyline(latlngs,{color:C.blue,opacity:.8,weight:4}).addTo(gmap.current)
-    const a=L.marker(latlngs[0],{icon:dotIcon('A',C.green)}).addTo(gmap.current)
-    const b=L.marker(latlngs[latlngs.length-1],{icon:dotIcon('B',C.red)}).addTo(gmap.current)
+    if(poly.current)poly.current.setMap(null)
+    if(marker.current)marker.current.setMap(null)
+    endpoints.current.forEach(m=>m.setMap(null)); endpoints.current=[]
+    const latlngs=pts.map(p=>({lat:p.lat,lng:p.lng}))
+    poly.current=new window.google.maps.Polyline({path:latlngs,strokeColor:C.blue,strokeOpacity:.8,strokeWeight:4,map:gmap.current})
+    const a=new window.google.maps.Marker({position:latlngs[0],icon:dotIcon('A',C.green),map:gmap.current})
+    const b=new window.google.maps.Marker({position:latlngs[latlngs.length-1],icon:dotIcon('B',C.red),map:gmap.current})
     endpoints.current=[a,b]
-    marker.current=L.marker(latlngs[0],{icon:playIcon}).addTo(gmap.current)
-    gmap.current.fitBounds(L.latLngBounds(latlngs),{paddingTopLeft:[30,50],paddingBottomRight:[30,120]})
+    marker.current=new window.google.maps.Marker({position:latlngs[0],icon:playIcon(),map:gmap.current})
+    const bounds=new window.google.maps.LatLngBounds()
+    latlngs.forEach(p=>bounds.extend(p))
+    gmap.current.fitBounds(bounds,{top:30,left:30,right:30,bottom:120})
     setIdx(0)
   }
   const load=()=>{ const r=MOCK[imei]?.[date]||[]; setRoute(r); setIdx(0); setPlaying(false); if(r.length&&ready)draw(r) }
-  useEffect(()=>{ clearInterval(timer.current); if(!playing||!route.length)return; timer.current=setInterval(()=>{ setIdx(p=>{ const n=p+1; if(n>=route.length){setPlaying(false);clearInterval(timer.current);return p}; if(marker.current)marker.current.setLatLng([route[n].lat,route[n].lng]); return n }) },600); return()=>clearInterval(timer.current) },[playing,route])
-  const go=n=>{ const i=Math.max(0,Math.min(route.length-1,n)); setIdx(i); if(marker.current&&route[i])marker.current.setLatLng([route[i].lat,route[i].lng]) }
+  useEffect(()=>{ clearInterval(timer.current); if(!playing||!route.length)return; timer.current=setInterval(()=>{ setIdx(p=>{ const n=p+1; if(n>=route.length){setPlaying(false);clearInterval(timer.current);return p}; if(marker.current)marker.current.setPosition({lat:route[n].lat,lng:route[n].lng}); return n }) },600); return()=>clearInterval(timer.current) },[playing,route])
+  const go=n=>{ const i=Math.max(0,Math.min(route.length-1,n)); setIdx(i); if(marker.current&&route[i])marker.current.setPosition({lat:route[i].lat,lng:route[i].lng}) }
   const cur=route[idx]; const pct=route.length>1?(idx/(route.length-1)*100):0
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
@@ -1143,6 +1177,12 @@ function HistoryScreen({ onBack }) {
       </div>
       <div style={{ flex:1, position:'relative', minHeight:0 }}>
         <div ref={mapEl} style={{ width:'100%', height:'100%' }}/>
+        {ready && (
+          <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
+            style={{ position:'absolute', top:12, right:12, zIndex:10, width:40, height:40, borderRadius:10, border:'none', background:sat?C.blue:'white', color:sat?'white':C.navy, boxShadow:'0 2px 8px rgba(0,0,0,.2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            <Layers size={18} color={sat?'white':C.blue}/>
+          </button>
+        )}
         {route.length===0 && (
           <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:10, background:'rgba(240,247,255,.94)', pointerEvents:'none' }}>
             <MapPin size={38} color={C.faint}/><div style={{ color:C.muted, fontSize:14 }}>Select vehicle and date, then tap Load</div>
