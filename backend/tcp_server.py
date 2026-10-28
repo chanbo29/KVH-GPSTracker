@@ -194,15 +194,29 @@ def parse_packet(data: bytes):
     return result
 
 # ── Update Django via API ──────────────────────────────────────
-def api_update_gps(imei: str, lat: float, lng: float, speed: int, course: int):
+# Field names must match ReceiveGPSSerializer in vehicles/serializers.py
+# exactly: imei, latitude, longitude, speed, direction, satellites (lat/lng/
+# course were wrong — every call was silently getting a 400 Bad Request,
+# since requests.post() doesn't raise on a 4xx and the caller never checked
+# the response, so every parsed GPS fix was being dropped at this last step).
+def api_update_gps(imei: str, lat: float, lng: float, speed: int, course: int, satellites: int = 0):
     try:
-        requests.post(
+        resp = requests.post(
             f'{API_BASE}/vehicles/receive-gps/',
-            json={ 'imei':imei, 'lat':lat, 'lng':lng, 'speed':speed, 'course':course },
+            json={
+                'imei': imei,
+                'latitude': lat,
+                'longitude': lng,
+                'speed': speed,
+                'direction': course,
+                'satellites': satellites,
+            },
             timeout=3,
         )
-    except Exception:
-        pass   # API might not be ready — silently skip
+        if resp.status_code >= 400:
+            print(f'⚠️  receive-gps API rejected update ({resp.status_code}): {resp.text}')
+    except Exception as e:
+        print(f'⚠️  receive-gps API call failed: {e}')
 
 def api_update_device_status(imei: str, status: str):
     try:
@@ -272,7 +286,7 @@ def handle_client(conn: socket.socket, addr):
                         log(f'⚠️  GPS: 0,0 — no satellite fix yet (satellites={pkt.get("satellites",0)})')
                     else:
                         log(f'📍 GPS — Lat:{lat} Lng:{lng} Speed:{spd}km/h Sats:{pkt.get("satellites",0)} | {pkt.get("timestamp","")}')
-                        api_update_gps(imei or '', lat, lng, spd, pkt.get('course',0))
+                        api_update_gps(imei or '', lat, lng, spd, pkt.get('course',0), pkt.get('satellites',0))
 
                     # Send GPS ACK — echo back whichever protocol (0x10 or
                     # 0x12) the device actually used, not a hardcoded 0x10.
