@@ -1312,7 +1312,7 @@ function HistoryScreen({ onBack }) {
   const load=()=>{
     api.vehicles.history(imei, date).then(logs=>{
       const r=(logs||[]).map(l=>({
-        lat:l.latitude, lng:l.longitude, speed:l.speed,
+        lat:parseFloat(l.latitude), lng:parseFloat(l.longitude), speed:parseFloat(l.speed)||0,
         time:new Date(l.timestamp).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Phnom_Penh'}),
       }))
       setRoute(r); setIdx(0); setPlaying(false); if(r.length&&ready)draw(r)

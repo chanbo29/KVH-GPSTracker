@@ -375,9 +375,9 @@ export default function History() {
     api.vehicles.history(selectedIMEI, selectedDate)
       .then(logs => {
         const data = (logs || []).map((log, i, arr) => ({
-          lat:   log.latitude,
-          lng:   log.longitude,
-          speed: log.speed,
+          lat:   parseFloat(log.latitude),
+          lng:   parseFloat(log.longitude),
+          speed: parseFloat(log.speed) || 0,
           time:  new Date(log.timestamp).toLocaleTimeString('en-GB', {
                    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Phnom_Penh',
                  }),
