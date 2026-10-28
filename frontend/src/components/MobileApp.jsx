@@ -80,7 +80,10 @@ function getMobileLabelClass() {
       const div = document.createElement('div')
       div.style.position = 'absolute'
       div.style.transform = 'translate(-50%, calc(-100% - 12px))'
-      div.style.transition = 'left .45s cubic-bezier(.4,0,.2,1), top .45s cubic-bezier(.4,0,.2,1)'
+      // No transition by default — draw() also fires on every map pan/zoom,
+      // and animating that makes the bubble lag behind the pin while
+      // dragging the map. Only ease when update() gets a real new GPS fix.
+      div.style.transition = 'none'
       div.style.zIndex = '45'
       const card = document.createElement('div')
       card.className = 'kvh-m-bubble'
@@ -103,9 +106,15 @@ function getMobileLabelClass() {
     update(position, html) {
       this.position = position
       if (this.card) this.card.innerHTML = html
+      if (this.div) {
+        this.div.style.transition = 'left .45s cubic-bezier(.4,0,.2,1), top .45s cubic-bezier(.4,0,.2,1)'
+        clearTimeout(this._transTimer)
+        this._transTimer = setTimeout(() => { if (this.div) this.div.style.transition = 'none' }, 480)
+      }
       this.draw()
     }
     onRemove() {
+      clearTimeout(this._transTimer)
       if (this.div?.parentNode) this.div.parentNode.removeChild(this.div)
       this.div = null; this.card = null
     }
