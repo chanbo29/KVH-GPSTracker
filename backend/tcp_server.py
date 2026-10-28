@@ -54,10 +54,15 @@ def decode_imei(raw: bytes) -> str:
     return hex_str[1:]             # drop the leading padding nibble, keep all 15 real digits
 
 # ── Parse latitude / longitude ────────────────────────────────
+# Raw is in units of 1/30000 of a minute of arc, i.e. raw/1,800,000 = degrees
+# directly. (The previous version here did `raw // 30000` and called that
+# "degrees" — but raw/30000 is actually *total minutes*, not degrees, so it
+# produced values like 6296° instead of ~104°. This was never caught before
+# because gps_simulator.py encoded coordinates with the same inverted math,
+# so simulated data round-tripped fine while real hardware data — encoded
+# per the actual GT06 spec — decoded as garbage.)
 def decode_coord(raw: int, is_south_or_west: bool) -> float:
-    degrees = raw // 30000
-    minutes = (raw % 30000) / 30000 * 60
-    val = degrees + minutes / 60
+    val = raw / 1_800_000.0
     return -val if is_south_or_west else val
 
 # ── Parse a full GT06 packet from buffer ──────────────────────
@@ -115,8 +120,13 @@ def parse_packet(data: bytes):
         result['type'] = 'login'
         result['imei'] = decode_imei(imei_raw)
 
-    # ── 0x10 GPS DATA ────────────────────────────────────────
-    elif protocol == 0x10 and len(data) >= 30:
+    # ── 0x10 / 0x12 GPS DATA ──────────────────────────────────
+    # Both protocol numbers carry the exact same field layout for the parts
+    # we need (date/time, satellites, lat, lng, speed, course) — 0x12 just
+    # has extra LBS/cell-tower bytes tacked on after, which we ignore. This
+    # device sends 0x12, not 0x10 — before this fix 0x12 fell into the
+    # "unknown" branch below and every real GPS fix was silently dropped.
+    elif protocol in (0x10, 0x12) and len(data) >= 30:
         try:
             d  = data[4]
             mo = data[5]
@@ -135,11 +145,16 @@ def parse_packet(data: bytes):
             speed    = data[19]
             course   = struct.unpack('>H', data[20:22])[0]
 
-            # Bit 2 of course high byte: 0=south, 1=north
-            # Bit 3 of course high byte: 0=west,  1=east
+            # Bit 2 of the course/status high byte: 0=south, 1=north.
+            # Bit 3: confirmed from this device's real packets to be
+            # 0=east, 1=west (the opposite of what was assumed before —
+            # every real fix from this tracker had bit3=0 while the
+            # device is physically in Cambodia, i.e. east, so the old
+            # `is_east = bool(... & 0x08)` had every fix landing as a
+            # negative/west longitude).
             course_high = data[20]
             is_north = bool(course_high & 0x04)
-            is_east  = bool(course_high & 0x08)
+            is_east  = not bool(course_high & 0x08)
 
             lat = decode_coord(lat_raw, not is_north)
             lng = decode_coord(lng_raw, not is_east)
@@ -250,8 +265,9 @@ def handle_client(conn: socket.socket, addr):
                         log(f'📍 GPS — Lat:{lat} Lng:{lng} Speed:{spd}km/h Sats:{pkt.get("satellites",0)} | {pkt.get("timestamp","")}')
                         api_update_gps(imei or '', lat, lng, spd, pkt.get('course',0))
 
-                    # Send GPS ACK
-                    conn.send(build_response(0x10, pkt['serial']))
+                    # Send GPS ACK — echo back whichever protocol (0x10 or
+                    # 0x12) the device actually used, not a hardcoded 0x10.
+                    conn.send(build_response(pkt['protocol'], pkt['serial']))
 
                 # ── HEARTBEAT ──────────────────────────────────
                 elif t == 'heartbeat':
