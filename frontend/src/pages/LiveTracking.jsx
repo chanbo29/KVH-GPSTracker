@@ -64,6 +64,27 @@ function mkIcon(status, course = 0) {
   }
 }
 
+// HTML content for the on-map info bubble that opens above a vehicle's pin —
+// driver name, vehicle + plate, and live coordinates, right where the user
+// is looking instead of only in the sidebar / bottom-right card.
+function mkInfoHtml(v) {
+  const s = st(v.status)
+  const hasDriver = v.owner && v.owner !== 'Unassigned'
+  const coords = v.lat && parseFloat(v.lat) !== 0
+    ? `${Number(v.lat).toFixed(6)}, ${Number(v.lng).toFixed(6)}`
+    : 'Waiting for GPS signal…'
+  return `
+    <div style="font-family:'Inter',system-ui,-apple-system,sans-serif;min-width:190px;padding:2px 2px 4px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+        <span style="width:7px;height:7px;border-radius:50%;background:${s.dot};flex-shrink:0"></span>
+        <span style="font-weight:800;font-size:13.5px;color:#0F172A">${hasDriver ? v.owner : '— No driver —'}</span>
+      </div>
+      <div style="font-size:12px;color:#64748B;margin-bottom:6px">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</div>
+      <div style="font-size:11.5px;color:${v.lat && parseFloat(v.lat)!==0 ? '#1B6BB5' : '#D97706'};font-family:monospace;font-weight:600">${coords}</div>
+    </div>
+  `
+}
+
 // Pulsing green ring behind a moving vehicle — a google.maps.Circle whose
 // radius/opacity we animate manually (CSS keyframes don't apply to Maps'
 // canvas-rendered overlays like they did to Leaflet's DOM-based markers).
@@ -102,7 +123,23 @@ export default function LiveTracking() {
   const gmap       = useRef(null)
   const markers    = useRef({})
   const pulses     = useRef({})
-  const [sat,       setSat]       = useState(false)
+  const infoWin    = useRef(null)
+  // Remember the user's last map-type choice (satellite vs roadmap) per
+  // browser, and default to satellite on first visit. Wrapped in try/catch
+  // since localStorage can throw or be unavailable in some contexts.
+  const [sat, setSat] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kvh_map_sat')
+      return saved === null ? true : saved === '1'
+    } catch { return true }
+  })
+  const toggleSat = () => {
+    setSat(s => {
+      const next = !s
+      try { localStorage.setItem('kvh_map_sat', next ? '1' : '0') } catch {}
+      return next
+    })
+  }
 
   const fetch = useCallback(async () => {
     try {
@@ -123,8 +160,24 @@ export default function LiveTracking() {
         markers.current[v.imei].setIcon(icon)
       } else {
         const m = new window.google.maps.Marker({ position:{lat,lng}, map:gmap.current, icon, title:v.name })
-        m.addListener('click', ()=>{ setSelected(v); gmap.current.panTo({lat,lng}); gmap.current.setZoom(16) })
+        m.addListener('click', ()=>{
+          const cur  = markers.current[v.imei].getPosition()
+          const pos  = { lat: cur.lat(), lng: cur.lng() }
+          setSelected(v)
+          gmap.current.panTo(pos)
+          gmap.current.setZoom(16)
+          if (!infoWin.current) infoWin.current = new window.google.maps.InfoWindow()
+          infoWin.current._imei = v.imei
+          infoWin.current.setContent(mkInfoHtml(v))
+          infoWin.current.setPosition(pos)
+          infoWin.current.open(gmap.current)
+        })
         markers.current[v.imei] = m
+      }
+      // Keep an already-open info bubble in sync with live position/data
+      if (infoWin.current?._imei === v.imei) {
+        infoWin.current.setContent(mkInfoHtml(v))
+        infoWin.current.setPosition({ lat, lng })
       }
       if (isMoving) {
         if (pulses.current[v.imei]) pulses.current[v.imei].setCenter(lat,lng)
@@ -170,8 +223,14 @@ export default function LiveTracking() {
   const focus = v => {
     setSelected(v)
     if(gmap.current&&v.lat&&parseFloat(v.lat)!==0){
-      gmap.current.panTo({ lat:parseFloat(v.lat), lng:parseFloat(v.lng) })
+      const pos = { lat:parseFloat(v.lat), lng:parseFloat(v.lng) }
+      gmap.current.panTo(pos)
       gmap.current.setZoom(16)
+      if (!infoWin.current) infoWin.current = new window.google.maps.InfoWindow()
+      infoWin.current._imei = v.imei
+      infoWin.current.setContent(mkInfoHtml(v))
+      infoWin.current.setPosition(pos)
+      infoWin.current.open(gmap.current)
     }
   }
 
@@ -387,7 +446,7 @@ export default function LiveTracking() {
 
         {/* ── Satellite toggle ──────────────────────────── */}
         {mapReady && (
-          <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
+          <button onClick={toggleSat} title={sat?'Satellite view on':'Switch to satellite view'}
             style={{ position:'absolute', left:16, bottom:20, zIndex:40, width:42, height:42, borderRadius:10, border:'none', background:sat?T.blue:'white', color:sat?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <Layers size={17}/>
           </button>
@@ -427,7 +486,7 @@ export default function LiveTracking() {
                       </div>
                     </div>
 
-                    <button onClick={()=>setSelected(null)}
+                    <button onClick={()=>{ setSelected(null); infoWin.current?.close() }}
                       style={{ width:30, height:30, borderRadius:8, background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.12)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'rgba(255,255,255,.6)', flexShrink:0 }}>
                       <X size={14}/>
                     </button>
