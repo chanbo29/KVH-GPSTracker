@@ -48,6 +48,31 @@ const MOCK_HISTORY = {
 
 const SPEEDS = [1, 2, 4, 8]
 
+// ── Compass bearing from point a to point b, in degrees (0 = north) ────
+function bearing(a, b) {
+  const toRad = d => d * Math.PI / 180
+  const toDeg = r => r * 180 / Math.PI
+  const dLng = toRad(b.lng - a.lng)
+  const y = Math.sin(dLng) * Math.cos(toRad(b.lat))
+  const x = Math.cos(toRad(a.lat)) * Math.sin(toRad(b.lat)) - Math.sin(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.cos(dLng)
+  return (toDeg(Math.atan2(y, x)) + 360) % 360
+}
+
+// ── Arrow-shaped vehicle icon for the playback marker, rotated to face the
+// direction of travel — same visual language as the Live Tracking markers.
+function vehicleIcon(course = 0, color = '#1B6BB5') {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24">
+    <g transform="rotate(${course} 12 12)">
+      <path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+    </g>
+  </svg>`
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new window.google.maps.Size(30, 30),
+    anchor: new window.google.maps.Point(15, 15),
+  }
+}
+
 const todayStr = () => new Date().toISOString().slice(0, 10)
 const addDays = (dateStr, n) => {
   const d = new Date(dateStr + 'T00:00:00')
@@ -198,11 +223,15 @@ export default function History() {
   const [mapLoading,   setMapLoading]   = useState(false)   // ← Google Maps script loading
   const [routeLoading, setRouteLoading] = useState(false)   // ← Route fetch loading
 
-  const mapEl     = useRef(null)
-  const gmapRef   = useRef(null)
-  const markerRef = useRef(null)
-  const polyRef   = useRef(null)
-  const timerRef  = useRef(null)
+  const mapEl       = useRef(null)
+  const gmapRef     = useRef(null)
+  const markerRef   = useRef(null)
+  const polyRef     = useRef(null)      // full route, dim/dashed
+  const trailRef    = useRef(null)      // bright "traveled so far" overlay
+  const pulseRef    = useRef(null)      // soft ring behind the marker while playing
+  const timerRef    = useRef(null)
+  const glideGenRef = useRef(0)         // cancels stale glide animations on seek
+  const rowRefs     = useRef([])        // route-log rows, so playback can auto-scroll to the active one
 
   const cur = route[routeIdx]
 
@@ -236,17 +265,59 @@ export default function History() {
 
   useEffect(() => { if (apiKey) loadMaps(apiKey) }, [apiKey])
 
+  // ── Smoothly glide the playback marker from its current spot to `to`,
+  // over `ms` milliseconds. A generation counter cancels any in-flight
+  // glide if the user seeks elsewhere before it finishes.
+  const glideMarker = (to, ms) => {
+    const marker = markerRef.current
+    if (!marker || !window.google?.maps) return
+    const gen  = ++glideGenRef.current
+    const cur  = marker.getPosition()
+    const from = { lat: cur.lat(), lng: cur.lng() }
+    const t0   = performance.now()
+    const ease = t => t < .5 ? 2*t*t : -1+(4-2*t)*t
+    const step = now => {
+      if (gen !== glideGenRef.current) return   // superseded by a newer seek
+      const p = Math.min((now - t0) / ms, 1)
+      const pos = { lat: from.lat+(to.lat-from.lat)*ease(p), lng: from.lng+(to.lng-from.lng)*ease(p) }
+      marker.setPosition(pos)
+      if (pulseRef.current) pulseRef.current.setCenter(pos)
+      if (p < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }
+
+  // Redraw just the bright "traveled so far" trail up through index `idx`
+  const updateTrail = (pts, idx) => {
+    if (!trailRef.current) return
+    trailRef.current.setPath(pts.slice(0, idx + 1))
+  }
+
   // ── Draw route on map ────────────────────────────────────────
   const drawRoute = (pts) => {
     if (!gmapRef.current || !window.google?.maps || !pts.length) return
     if (polyRef.current)   polyRef.current.setMap(null)
+    if (trailRef.current)  trailRef.current.setMap(null)
+    if (pulseRef.current)  { pulseRef.current._stopTick?.(); pulseRef.current.setMap(null) }
     if (markerRef.current) markerRef.current.setMap(null)
 
+    // Full route — dim, dashed, always visible as the "track ahead"
     polyRef.current = new window.google.maps.Polyline({
       path: pts, geodesic: true,
-      strokeColor: C.accent, strokeOpacity: .85, strokeWeight: 4,
+      strokeOpacity: 0,
+      icons: [{
+        icon: { path: 'M 0,-1 0,1', strokeOpacity: .55, strokeColor: C.accent, scale: 3 },
+        offset: '0', repeat: '14px',
+      }],
       map: gmapRef.current,
     })
+    // Bright overlay — the portion already "driven" during playback
+    trailRef.current = new window.google.maps.Polyline({
+      path: pts.slice(0, 1), geodesic: true,
+      strokeColor: C.accent, strokeOpacity: .95, strokeWeight: 5,
+      map: gmapRef.current,
+    })
+
     new window.google.maps.Marker({
       position: pts[0], map: gmapRef.current,
       label: { text:'A', color:'white', fontWeight:'bold', fontSize:'12px' },
@@ -266,11 +337,33 @@ export default function History() {
         })
       }
     })
+
+    // Soft pulsing ring behind the marker — only shown while playing
+    // (the [playing] effect below toggles its map)
+    const pulse = new window.google.maps.Circle({
+      map: null, center: pts[0], radius: 18,
+      fillColor: C.accent, fillOpacity: .25, strokeOpacity: 0, clickable: false, zIndex: 1,
+    })
+    let raf
+    const DUR = 1600
+    const t0 = performance.now()
+    const tick = now => {
+      const p = ((now - t0) % DUR) / DUR
+      pulse.setRadius(18 + p * 60)
+      pulse.setOptions({ fillOpacity: .22 * (1 - p) })
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    pulse._stopTick = () => cancelAnimationFrame(raf)
+    pulseRef.current = pulse
+
+    const course0 = pts.length > 1 ? bearing(pts[0], pts[1]) : 0
     markerRef.current = new window.google.maps.Marker({
       position: pts[0], map: gmapRef.current,
-      icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale:7, fillColor:'#1B6BB5', fillOpacity:1, strokeColor:'white', strokeWeight:2 },
+      icon: vehicleIcon(course0, C.accent),
       zIndex: 999,
     })
+
     const bounds = new window.google.maps.LatLngBounds()
     pts.forEach(p => bounds.extend(p))
     gmapRef.current.fitBounds(bounds, { top:60, right:60, bottom:60, left:60 })
@@ -297,24 +390,51 @@ export default function History() {
   }, [selectedIMEI, selectedDate, mapReady])
 
   // ── Playback animation ───────────────────────────────────────
+  // The marker glides smoothly to each next point (instead of teleporting),
+  // rotates to face the direction of travel, extends the bright "traveled"
+  // trail, and the camera eases along with it.
   useEffect(() => {
     clearInterval(timerRef.current)
+    if (pulseRef.current) pulseRef.current.setMap(playing ? gmapRef.current : null)
     if (!playing || !route.length) return
+    const interval = 500 / speed
     timerRef.current = setInterval(() => {
       setRouteIdx(prev => {
         const n = prev + 1
         if (n >= route.length) { setPlaying(false); return prev }
-        if (markerRef.current && window.google?.maps) markerRef.current.setPosition(route[n])
+        if (window.google?.maps) {
+          const course = bearing(route[prev], route[n])
+          markerRef.current?.setIcon(vehicleIcon(course, route[n].speed > 60 ? '#F59E0B' : C.accent))
+          glideMarker(route[n], Math.min(interval * .92, 900))
+          updateTrail(route, n)
+          gmapRef.current?.panTo(route[n])
+        }
         return n
       })
-    }, 500 / speed)
+    }, interval)
     return () => clearInterval(timerRef.current)
   }, [playing, speed, route])
+
+  // Keep the route-log scrolled to the active point while playback runs
+  useEffect(() => {
+    if (!playing) return
+    rowRefs.current[routeIdx]?.scrollIntoView({ behavior:'smooth', block:'nearest' })
+  }, [routeIdx, playing])
 
   const moveTo = (n) => {
     const idx = Math.max(0, Math.min(route.length - 1, n))
     setRouteIdx(idx)
-    if (markerRef.current && window.google?.maps && route[idx]) markerRef.current.setPosition(route[idx])
+    if (markerRef.current && window.google?.maps && route[idx]) {
+      glideGenRef.current++   // cancel any in-flight glide — this is an instant seek
+      markerRef.current.setPosition(route[idx])
+      if (pulseRef.current) pulseRef.current.setCenter(route[idx])
+      const ref = route[idx+1] || route[idx-1]
+      if (ref) {
+        const course = idx < route.length-1 ? bearing(route[idx], route[idx+1]) : bearing(route[idx-1], route[idx])
+        markerRef.current.setIcon(vehicleIcon(course, route[idx].speed > 60 ? '#F59E0B' : C.accent))
+      }
+      updateTrail(route, idx)
+    }
   }
 
   // ── Stats ────────────────────────────────────────────────────
@@ -328,6 +448,14 @@ export default function History() {
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'calc(100vh - 60px)', overflow:'hidden', background:'#F1F5F9' }}>
       <LoadingStyles/>
+      <style>{`
+        @keyframes kvhHistPop {
+          0%   { opacity:0; transform:scale(.85) translateY(-6px); }
+          60%  { opacity:1; transform:scale(1.03) translateY(0); }
+          100% { opacity:1; transform:scale(1) translateY(0); }
+        }
+        .kvh-hist-pop{ animation:kvhHistPop .3s cubic-bezier(.34,1.56,.64,1); }
+      `}</style>
 
       {/* ── Top bar ─────────────────────────────────────────── */}
       <div style={{ background:'white', borderBottom:BORDER, flexShrink:0 }}>
@@ -423,8 +551,8 @@ export default function History() {
           ) : (
             <div style={{ flex:1, overflowY:'auto' }}>
               {route.map((pt, i) => (
-                <div key={i} onClick={() => moveTo(i)}
-                  style={{ display:'flex', gap:10, padding:'10px 14px', borderBottom: i < route.length-1 ? '1px solid #F8FAFC' : 'none', cursor:'pointer', background: routeIdx===i ? C.accentL : 'transparent', borderLeft:'3px solid '+(routeIdx===i ? C.accent : 'transparent'), transition:'all .1s' }}
+                <div key={i} ref={el => rowRefs.current[i] = el} onClick={() => moveTo(i)}
+                  style={{ display:'flex', gap:10, padding:'10px 14px', borderBottom: i < route.length-1 ? '1px solid #F8FAFC' : 'none', cursor:'pointer', background: routeIdx===i ? C.accentL : 'transparent', borderLeft:'3px solid '+(routeIdx===i ? C.accent : 'transparent'), transition:'all .15s' }}
                   onMouseEnter={e => { if (routeIdx!==i) e.currentTarget.style.background=C.bg }}
                   onMouseLeave={e => { if (routeIdx!==i) e.currentTarget.style.background='transparent' }}>
                   {/* Timeline dot */}
@@ -515,9 +643,11 @@ export default function History() {
             </div>
           )}
 
-          {/* Current point info bubble */}
+          {/* Current point info bubble — re-keyed on every step so its
+              entrance animation plays each time playback advances */}
           {cur && route.length > 0 && !routeLoading && (
-            <div style={{ position:'absolute', top:16, left:16, background:'white', borderRadius:12, padding:'12px 16px', boxShadow:'0 4px 20px rgba(0,0,0,.12)', border:BORDER, minWidth:200 }}>
+            <div key={routeIdx} className="kvh-hist-pop"
+              style={{ position:'absolute', top:16, left:16, background:'white', borderRadius:12, padding:'12px 16px', boxShadow:'0 4px 20px rgba(0,0,0,.12)', border:BORDER, minWidth:200, borderLeft:`3px solid ${cur.speed > 60 ? '#F59E0B' : cur.speed === 0 ? C.muted : C.accent}` }}>
               <div style={{ color:C.faint, fontSize:10, marginBottom:6 }}>Current Position</div>
               <div style={{ display:'flex', gap:16 }}>
                 <div>
