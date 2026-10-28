@@ -48,7 +48,7 @@ function sinceLabel(iso) {
   return `${days}d ${hrs % 24}h`
 }
 
-function animateMarker(marker, lat, lng, ms = 900) {
+function animateMarker(marker, lat, lng, ms = 450) {
   const cur  = marker.getPosition()
   const from = { lat: cur.lat(), lng: cur.lng() }
   const t0   = performance.now()
@@ -153,7 +153,7 @@ function getVehicleLabelClass() {
       const div = document.createElement('div')
       div.style.position = 'absolute'
       div.style.transform = 'translate(-50%, calc(-100% - 15px))'
-      div.style.transition = 'left .9s cubic-bezier(.4,0,.2,1), top .9s cubic-bezier(.4,0,.2,1)'
+      div.style.transition = 'left .45s cubic-bezier(.4,0,.2,1), top .45s cubic-bezier(.4,0,.2,1)'
       div.style.zIndex = '45'
 
       const card = document.createElement('div')

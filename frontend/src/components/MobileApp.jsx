@@ -63,6 +63,74 @@ const sinceSuffix = v => {
   return since ? ' · ' + since : ''
 }
 
+// Compact on-map bubble for the mobile live map — same info as the desktop
+// bubble (name, status+duration, vehicle/plate, coords) but sized for a
+// phone screen. Lazy class since OverlayView only exists once Maps loads.
+let MobileLabelClass = null
+function getMobileLabelClass() {
+  if (MobileLabelClass) return MobileLabelClass
+  class MobileLabel extends window.google.maps.OverlayView {
+    constructor(map, position, html) {
+      super()
+      this.position = position
+      this.div = null; this.card = null; this.html = html
+      this.setMap(map)
+    }
+    onAdd() {
+      const div = document.createElement('div')
+      div.style.position = 'absolute'
+      div.style.transform = 'translate(-50%, calc(-100% - 12px))'
+      div.style.transition = 'left .45s cubic-bezier(.4,0,.2,1), top .45s cubic-bezier(.4,0,.2,1)'
+      div.style.zIndex = '45'
+      const card = document.createElement('div')
+      card.className = 'kvh-m-bubble'
+      card.style.position = 'relative'
+      card.innerHTML = this.html
+      div.appendChild(card)
+      this.div = div; this.card = card
+      this.getPanes().floatPane.appendChild(div)
+      this.draw()
+    }
+    draw() {
+      if (!this.div) return
+      const proj = this.getProjection()
+      if (!proj) return
+      const pt = proj.fromLatLngToDivPixel(new window.google.maps.LatLng(this.position))
+      if (!pt) return
+      this.div.style.left = pt.x + 'px'
+      this.div.style.top = pt.y + 'px'
+    }
+    update(position, html) {
+      this.position = position
+      if (this.card) this.card.innerHTML = html
+      this.draw()
+    }
+    onRemove() {
+      if (this.div?.parentNode) this.div.parentNode.removeChild(this.div)
+      this.div = null; this.card = null
+    }
+  }
+  MobileLabelClass = MobileLabel
+  return MobileLabelClass
+}
+function mkMobileBubbleHtml(v) {
+  const hasDriver = v.owner && v.owner !== 'Unassigned'
+  const hasFix = v.lat && parseFloat(v.lat) !== 0
+  const coords = hasFix ? `${Number(v.lat).toFixed(5)}, ${Number(v.lng).toFixed(5)}` : 'No GPS'
+  const dotCls = v.status === 'moving' ? 'kvh-m-dot-live' : ''
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:4px">
+      <span style="font-weight:800;font-size:10.5px;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px">${hasDriver ? v.owner : dName(v)}</span>
+      <span style="display:flex;align-items:center;gap:3px;background:${sb(v.status)};padding:2px 5px;border-radius:20px;flex-shrink:0">
+        <span class="${dotCls}" style="width:4px;height:4px;border-radius:50%;background:${sc(v.status)}"></span>
+        <span style="font-size:7px;font-weight:700;color:${sc(v.status)};text-transform:uppercase">${tStatus(v.status)}${sinceSuffix(v)}</span>
+      </span>
+    </div>
+    <div style="font-size:8.5px;color:#64748B;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</div>
+    <div style="font-size:8px;color:#1B6BB5;font-family:ui-monospace,Menlo,monospace;font-weight:600;white-space:nowrap">${coords}</div>
+  `
+}
+
 /* ── Loading components ─────────────────────────────────────── */
 const PULSE_CSS = `
 @keyframes kvh-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
@@ -71,6 +139,11 @@ const PULSE_CSS = `
 @keyframes kvh-fadeIn  { from{opacity:0} to{opacity:1} }
 .kvh-pulse { animation: kvh-pulse 1.5s ease-in-out infinite }
 .kvh-spin  { animation: kvh-spin  0.8s linear infinite }
+@keyframes kvh-mBubbleIn { 0%{opacity:0; transform:scale(.7) translateY(4px)} 100%{opacity:1; transform:scale(1) translateY(0)} }
+@keyframes kvh-mDotLive  { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.5)} 50%{box-shadow:0 0 0 3px rgba(34,197,94,0)} }
+.kvh-m-bubble { animation:kvh-mBubbleIn .3s cubic-bezier(.34,1.56,.64,1); background:white; border-radius:10px; padding:6px 8px; box-shadow:0 3px 14px rgba(0,0,0,.18); border:1px solid rgba(0,0,0,.06); min-width:108px; max-width:150px }
+.kvh-m-bubble::after { content:''; position:absolute; left:50%; bottom:-5px; transform:translateX(-50%) rotate(45deg); width:9px; height:9px; background:white; border-right:1px solid rgba(0,0,0,.06); border-bottom:1px solid rgba(0,0,0,.06) }
+.kvh-m-dot-live { animation: kvh-mDotLive 1.6s ease-in-out infinite }
 `
 
 const Skel = ({ w='100%', h=14, r=8, style={} }) => (
@@ -384,7 +457,7 @@ function TrackingScreen() {
   const [sheetFilter, setSheetFilter] = useState('all')
   const [ready,     setReady]     = useState(false)
   const [search,    setSearch]    = useState('')
-  const mapEl=useRef(null); const gmap=useRef(null); const marks=useRef({})
+  const mapEl=useRef(null); const gmap=useRef(null); const marks=useRef({}); const bubbles=useRef({})
   const filtered = vehicles
     .filter(v=>sheetFilter==='all'||v.status===sheetFilter)
     .filter(v=>!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.includes(search)||v.owner?.toLowerCase().includes(search.toLowerCase()))
@@ -425,10 +498,17 @@ function TrackingScreen() {
     if(!ready)return
     vehicles.forEach(v=>{
       if(!v.lat||!v.lng)return
-      if(marks.current[v.imei]){marks.current[v.imei].setPosition({lat:v.lat,lng:v.lng});return}
-      const m=new window.google.maps.Marker({position:{lat:v.lat,lng:v.lng},map:gmap.current,icon:mkIcon(v.status,dName(v).charAt(0).toUpperCase()),title:dName(v)+' · '+v.plate})
+      const pos={lat:v.lat,lng:v.lng}
+      if(marks.current[v.imei]){
+        marks.current[v.imei].setPosition(pos)
+        bubbles.current[v.imei]?.update(pos, mkMobileBubbleHtml(v))
+        return
+      }
+      const m=new window.google.maps.Marker({position:pos,map:gmap.current,icon:mkIcon(v.status,dName(v).charAt(0).toUpperCase()),title:dName(v)+' · '+v.plate})
       m.addListener('click',()=>{setSel(v);setSheet(false)})
       marks.current[v.imei]=m
+      const LabelCls=getMobileLabelClass()
+      bubbles.current[v.imei]=new LabelCls(gmap.current, pos, mkMobileBubbleHtml(v))
     })
   },[vehicles,ready])
   const panTo=v=>{setSel(v);setSheet(false);if(gmap.current&&v.lat&&v.lng){gmap.current.panTo({lat:v.lat,lng:v.lng});gmap.current.setZoom(16)}}
