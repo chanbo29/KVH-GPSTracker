@@ -126,7 +126,16 @@ def parse_packet(data: bytes):
     # has extra LBS/cell-tower bytes tacked on after, which we ignore. This
     # device sends 0x12, not 0x10 — before this fix 0x12 fell into the
     # "unknown" branch below and every real GPS fix was silently dropped.
-    elif protocol in (0x10, 0x12) and len(data) >= 30:
+    #
+    # Length check: only the first 22 bytes (date..course, data[4:22]) are
+    # ever read below, so that's the real minimum. The previous `>= 30`
+    # assumed every GPS packet carries the extra LBS/cell-tower bytes that
+    # only 0x12 packets have (making those ~36 bytes) — but a plain 0x10
+    # packet with no LBS data (28 bytes total, e.g. from gps_simulator.py,
+    # and possibly from this device too) is shorter than that and was
+    # falling through to "unknown packet type", silently dropping every
+    # fix sent that way.
+    elif protocol in (0x10, 0x12) and len(data) >= 22:
         try:
             d  = data[4]
             mo = data[5]
