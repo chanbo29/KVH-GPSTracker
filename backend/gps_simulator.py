@@ -55,8 +55,14 @@ def build_login() -> bytes:
 # ── Build GT06 GPS packet (0x10) ──────────────────────────────
 def build_gps(lat: float, lng: float, speed: int) -> bytes:
     now = datetime.now()
-    lat_i = int(abs(lat) * 30000)
-    lng_i = int(abs(lng) * 30000)
+    # raw = degrees * 1,800,000 (i.e. 30000 "minutes units" per degree,
+    # 60 of those per minute of arc). This must match tcp_server.py's
+    # decode_coord() exactly -- it used to be `* 30000` here, matching
+    # decode_coord's OLD (buggy) degrees-as-raw//30000 math. Now that
+    # decode_coord is fixed to raw/1,800,000, this has to match or every
+    # simulated fix will land in the wrong place.
+    lat_i = int(abs(lat) * 1_800_000)
+    lng_i = int(abs(lng) * 1_800_000)
 
     body = (
         bytes([0x10])                           +  # protocol: GPS
@@ -72,7 +78,12 @@ def build_gps(lat: float, lng: float, speed: int) -> bytes:
         struct.pack('>I', lat_i)                +  # latitude
         struct.pack('>I', lng_i)                +  # longitude
         bytes([speed & 0xFF])                   +  # speed
-        bytes([0x00, 0x28])                     +  # course (north, GPS-real-time bits set)
+        # Course/status high byte: bit2 (0x04) = north, confirmed correct
+        # from real device data. Bit3 (0x08) = west on this device's real
+        # data (confirmed the opposite of what was assumed before), so
+        # leaving bit3 clear (0) correctly means east here -- 0x04 sets
+        # north + east, matching Cambodia (both positive).
+        bytes([0x04, 0x28])                     +
         bytes([0x00, 0x01])                         # serial number
     )
     return _wrap(body)
