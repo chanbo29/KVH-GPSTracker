@@ -370,7 +370,7 @@ function TrackingScreen() {
   const moving  = vehicles.filter(v=>v.status==='moving').length
   const stopped = vehicles.filter(v=>v.status==='stopped').length
   const offline = vehicles.filter(v=>v.status==='offline').length
-  const [sat,setSat]=useState(false)
+  const [sat,setSat]=useState(()=>{try{return localStorage.getItem('kvh_map_sat')!=='0'}catch{return true}})
   const myMarker=useRef(null); const myAccuracy=useRef(null)
   const [locating,setLocating]=useState(false)
   const [locErr,setLocErr]=useState('')
@@ -482,7 +482,7 @@ function TrackingScreen() {
 
       {/* ── Satellite/roadmap toggle ───────────────────────────────────── */}
       {ready && (
-        <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
+        <button onClick={()=>setSat(s=>{const n=!s; try{localStorage.setItem('kvh_map_sat', n?'1':'0')}catch{}; return n})} title={sat?'Satellite view on':'Switch to satellite view'}
           style={{ position:'absolute', right:14, bottom: sel && !sheet ? 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 222px)' : 'calc(52px + max(8px,env(safe-area-inset-bottom)) + 70px)', width:46, height:46, borderRadius:23, background:sat?C.blue:'white', border:'none', boxShadow:'0 4px 16px rgba(0,0,0,.22)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', zIndex:39, transition:'bottom .2s ease' }}>
           <Layers size={19} color={sat?'white':C.blue}/>
         </button>
@@ -1142,13 +1142,13 @@ const MOCK = { '865784056472668': { '2026-09-10': [
 function HistoryScreen({ onBack }) {
   const { data:vehicles, loading:vL } = useApi(api.vehicles.list)
   const [imei,    setImei]    = useState('')
-  const [date,    setDate]    = useState('2026-09-10')
+  const [date,    setDate]    = useState(()=>new Date().toISOString().slice(0,10))
   const [route,   setRoute]   = useState([])
   const [idx,     setIdx]     = useState(0)
   const [playing, setPlaying] = useState(false)
   const [ready,   setReady]   = useState(false)
   const mapEl=useRef(null); const gmap=useRef(null); const marker=useRef(null); const poly=useRef(null); const endpoints=useRef([]); const timer=useRef(null)
-  const [sat,setSat]=useState(false)
+  const [sat,setSat]=useState(()=>{try{return localStorage.getItem('kvh_map_sat')!=='0'}catch{return true}})
   const dotIcon=(label,color)=>{
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="${color}" stroke="white" stroke-width="2"/><text x="12" y="16" font-family="system-ui" font-size="12" font-weight="700" fill="white" text-anchor="middle">${label}</text></svg>`
     return{
@@ -1199,7 +1199,15 @@ function HistoryScreen({ onBack }) {
     gmap.current.fitBounds(bounds,{top:30,left:30,right:30,bottom:120})
     setIdx(0)
   }
-  const load=()=>{ const r=MOCK[imei]?.[date]||[]; setRoute(r); setIdx(0); setPlaying(false); if(r.length&&ready)draw(r) }
+  const load=()=>{
+    api.vehicles.history(imei, date).then(logs=>{
+      const r=(logs||[]).map(l=>({
+        lat:l.latitude, lng:l.longitude, speed:l.speed,
+        time:new Date(l.timestamp).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Phnom_Penh'}),
+      }))
+      setRoute(r); setIdx(0); setPlaying(false); if(r.length&&ready)draw(r)
+    }).catch(()=>{ setRoute([]); setIdx(0); setPlaying(false) })
+  }
   useEffect(()=>{ clearInterval(timer.current); if(!playing||!route.length)return; timer.current=setInterval(()=>{ setIdx(p=>{ const n=p+1; if(n>=route.length){setPlaying(false);clearInterval(timer.current);return p}; if(marker.current)marker.current.setPosition({lat:route[n].lat,lng:route[n].lng}); return n }) },600); return()=>clearInterval(timer.current) },[playing,route])
   const go=n=>{ const i=Math.max(0,Math.min(route.length-1,n)); setIdx(i); if(marker.current&&route[i])marker.current.setPosition({lat:route[i].lat,lng:route[i].lng}) }
   const cur=route[idx]; const pct=route.length>1?(idx/(route.length-1)*100):0
@@ -1219,7 +1227,7 @@ function HistoryScreen({ onBack }) {
       <div style={{ flex:1, position:'relative', minHeight:0 }}>
         <div ref={mapEl} style={{ width:'100%', height:'100%' }}/>
         {ready && (
-          <button onClick={()=>setSat(s=>!s)} title={sat?'Satellite view on':'Switch to satellite view'}
+          <button onClick={()=>setSat(s=>{const n=!s; try{localStorage.setItem('kvh_map_sat', n?'1':'0')}catch{}; return n})} title={sat?'Satellite view on':'Switch to satellite view'}
             style={{ position:'absolute', top:12, right:12, zIndex:10, width:40, height:40, borderRadius:10, border:'none', background:sat?C.blue:'white', color:sat?'white':C.navy, boxShadow:'0 2px 8px rgba(0,0,0,.2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <Layers size={18} color={sat?'white':C.blue}/>
           </button>
