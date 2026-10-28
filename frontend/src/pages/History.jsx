@@ -380,7 +380,7 @@ export default function History() {
           speed: parseFloat(log.speed) || 0,
           ts:    new Date(log.timestamp).getTime(),
           time:  new Date(log.timestamp).toLocaleTimeString('en-GB', {
-                   hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Phnom_Penh',
+                   hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Phnom_Penh',
                  }),
           event: i === 0 ? 'Start' : i === arr.length - 1 ? 'Stop' : '',
         }))
@@ -584,18 +584,17 @@ export default function History() {
             </div>
           ) : (
             <div style={{ flex:1, overflowY:'auto' }}>
-              {/* Newest fix first (top), oldest last (bottom) — the
-                  timeline dot/line visually flows downward toward the
-                  past, matching the reversed order. */}
-              {route.map((pt, i) => i).reverse().map(i => { const pt = route[i]; return (
+              {/* Chronological: earliest fix at top, latest at bottom
+                  (e.g. 1:00pm ... 5:00pm reading down the list). */}
+              {route.map((pt, i) => (
                 <div key={i} ref={el => rowRefs.current[i] = el} onClick={() => moveTo(i)}
-                  style={{ display:'flex', gap:10, padding:'10px 14px', borderBottom: i > 0 ? '1px solid #F8FAFC' : 'none', cursor:'pointer', background: routeIdx===i ? C.accentL : 'transparent', borderLeft:'3px solid '+(routeIdx===i ? C.accent : 'transparent'), transition:'all .15s' }}
+                  style={{ display:'flex', gap:10, padding:'10px 14px', borderBottom: i < route.length - 1 ? '1px solid #F8FAFC' : 'none', cursor:'pointer', background: routeIdx===i ? C.accentL : 'transparent', borderLeft:'3px solid '+(routeIdx===i ? C.accent : 'transparent'), transition:'all .15s' }}
                   onMouseEnter={e => { if (routeIdx!==i) e.currentTarget.style.background=C.bg }}
                   onMouseLeave={e => { if (routeIdx!==i) e.currentTarget.style.background='transparent' }}>
                   {/* Timeline dot */}
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
                     <div style={{ width:10, height:10, borderRadius:'50%', background: pt.event==='Start'?C.green:pt.event==='Stop'?C.red:pt.event==='Overspeed'?'#F59E0B':pt.speed===0?C.muted:C.accent, flexShrink:0, marginTop:2 }}/>
-                    {i > 0 && <div style={{ width:2, flex:1, background:'#E2E8F0', marginTop:3, minHeight:16 }}/>}
+                    {i < route.length - 1 && <div style={{ width:2, flex:1, background:'#E2E8F0', marginTop:3, minHeight:16 }}/>}
                   </div>
                   {/* Info */}
                   <div style={{ flex:1, minWidth:0 }}>
@@ -615,7 +614,7 @@ export default function History() {
                     </div>
                   </div>
                 </div>
-              )})}
+              ))}
             </div>
           )}
         </div>
