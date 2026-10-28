@@ -106,7 +106,7 @@ function mkInfoHtml(v) {
         <span style="font-weight:800;font-size:12.5px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasDriver ? v.owner : '— No driver —'}</span>
         <span style="display:flex;align-items:center;gap:4px;background:${s.bg};padding:3px 7px;border-radius:20px;flex-shrink:0">
           <span class="${v.status==='moving'?'kvh-dot-live':''}" style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
-          <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}${since ? ' · ' + since : ''}</span>
+          <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>${since ? `<span style="font-size:8px;font-weight:600;color:${s.color};opacity:.78;margin-left:3px">· ${since}</span>` : ''}
         </span>
       </div>
 
