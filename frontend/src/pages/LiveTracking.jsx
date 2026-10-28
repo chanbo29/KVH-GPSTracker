@@ -65,24 +65,47 @@ function mkIcon(status, course = 0) {
 }
 
 // HTML content for the on-map info bubble that sits above a vehicle's pin at
-// all times — driver name, vehicle + plate, and live coordinates, right
-// where the user is looking instead of only in the sidebar / bottom-right
-// card. Kept compact (small type, tight spacing) since it's always visible
-// rather than only shown on click.
+// all times — driver name, status, vehicle + plate, and live coordinates,
+// right where the user is looking instead of only in the sidebar /
+// bottom-right card. Styled as a small, polished card (status pill, subtle
+// icons, clear hierarchy) matching the app's navy/blue palette, and kept
+// compact since it's always visible rather than only shown on click.
 function mkInfoHtml(v) {
   const s = st(v.status)
   const hasDriver = v.owner && v.owner !== 'Unassigned'
-  const coords = v.lat && parseFloat(v.lat) !== 0
+  const hasFix = v.lat && parseFloat(v.lat) !== 0
+  const coords = hasFix
     ? `${Number(v.lat).toFixed(5)}, ${Number(v.lng).toFixed(5)}`
     : 'No GPS signal'
+  const coordColor = hasFix ? '#1B6BB5' : '#D97706'
   return `
-    <div style="font-family:'Inter',system-ui,-apple-system,sans-serif;min-width:118px;padding:0 0 1px">
-      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
-        <span style="width:6px;height:6px;border-radius:50%;background:${s.dot};flex-shrink:0"></span>
-        <span style="font-weight:800;font-size:11.5px;color:#0F172A;white-space:nowrap">${hasDriver ? v.owner : '— No driver —'}</span>
+    <div style="font-family:'Inter',system-ui,-apple-system,sans-serif;min-width:150px;padding:1px 1px 2px">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+        <span style="font-weight:800;font-size:12px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasDriver ? v.owner : '— No driver —'}</span>
+        <span style="display:flex;align-items:center;gap:3px;background:${s.bg};padding:2px 6px;border-radius:20px;flex-shrink:0">
+          <span style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
+          <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>
+        </span>
       </div>
-      <div style="font-size:10px;color:#64748B;margin-bottom:3px;white-space:nowrap">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</div>
-      <div style="font-size:9.5px;color:${v.lat && parseFloat(v.lat)!==0 ? '#1B6BB5' : '#D97706'};font-family:monospace;font-weight:600;white-space:nowrap">${coords}</div>
+
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+          <path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"/>
+          <rect x="3" y="11" width="18" height="6" rx="1.5"/>
+          <circle cx="7.5" cy="17.5" r="1.4"/>
+          <circle cx="16.5" cy="17.5" r="1.4"/>
+        </svg>
+        <span style="font-size:10px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</span>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:5px;padding-top:5px;border-top:1px solid #EEF2F7">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${coordColor}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+          <path d="M12 22s7-7.5 7-12.5A7 7 0 0 0 5 9.5C5 14.5 12 22 12 22z"/>
+          <circle cx="12" cy="9.5" r="2.3"/>
+        </svg>
+        <span style="font-size:9.5px;color:${coordColor};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;white-space:nowrap">${coords}</span>
+      </div>
     </div>
   `
 }
