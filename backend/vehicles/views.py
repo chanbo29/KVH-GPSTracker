@@ -1,4 +1,5 @@
 import json
+import datetime
 import pytz
 from django.utils import timezone
 from rest_framework import viewsets, status
@@ -78,7 +79,19 @@ class VehicleViewSet(viewsets.ModelViewSet):
         date    = request.query_params.get('date')
         logs    = GPSLog.objects.filter(imei=vehicle.imei)
         if date:
-            logs = logs.filter(timestamp__date=date)
+            # Not timestamp__date=date: that relies on MySQL's CONVERT_TZ()
+            # to translate the UTC-stored timestamp into Asia/Phnom_Penh,
+            # which silently returns NULL (so the filter matches nothing)
+            # unless MySQL's timezone tables have been loaded on the server.
+            # Computing the local day's start/end in Python and filtering
+            # with a plain range comparison sidesteps that dependency.
+            try:
+                day = datetime.datetime.strptime(date, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({'date': ['Use YYYY-MM-DD.']}, status=400)
+            start = CAMBODIA_TZ.localize(datetime.datetime.combine(day, datetime.time.min))
+            end   = start + datetime.timedelta(days=1)
+            logs  = logs.filter(timestamp__gte=start, timestamp__lt=end)
         return Response(GPSLogSerializer(logs[:500], many=True).data)
 
     @action(detail=False, methods=['post'], url_path='receive-gps')
