@@ -64,23 +64,25 @@ function mkIcon(status, course = 0) {
   }
 }
 
-// HTML content for the on-map info bubble that opens above a vehicle's pin —
-// driver name, vehicle + plate, and live coordinates, right where the user
-// is looking instead of only in the sidebar / bottom-right card.
+// HTML content for the on-map info bubble that sits above a vehicle's pin at
+// all times — driver name, vehicle + plate, and live coordinates, right
+// where the user is looking instead of only in the sidebar / bottom-right
+// card. Kept compact (small type, tight spacing) since it's always visible
+// rather than only shown on click.
 function mkInfoHtml(v) {
   const s = st(v.status)
   const hasDriver = v.owner && v.owner !== 'Unassigned'
   const coords = v.lat && parseFloat(v.lat) !== 0
-    ? `${Number(v.lat).toFixed(6)}, ${Number(v.lng).toFixed(6)}`
-    : 'Waiting for GPS signal…'
+    ? `${Number(v.lat).toFixed(5)}, ${Number(v.lng).toFixed(5)}`
+    : 'No GPS signal'
   return `
-    <div style="font-family:'Inter',system-ui,-apple-system,sans-serif;min-width:190px;padding:2px 2px 4px">
-      <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
-        <span style="width:7px;height:7px;border-radius:50%;background:${s.dot};flex-shrink:0"></span>
-        <span style="font-weight:800;font-size:13.5px;color:#0F172A">${hasDriver ? v.owner : '— No driver —'}</span>
+    <div style="font-family:'Inter',system-ui,-apple-system,sans-serif;min-width:118px;padding:0 0 1px">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+        <span style="width:6px;height:6px;border-radius:50%;background:${s.dot};flex-shrink:0"></span>
+        <span style="font-weight:800;font-size:11.5px;color:#0F172A;white-space:nowrap">${hasDriver ? v.owner : '— No driver —'}</span>
       </div>
-      <div style="font-size:12px;color:#64748B;margin-bottom:6px">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</div>
-      <div style="font-size:11.5px;color:${v.lat && parseFloat(v.lat)!==0 ? '#1B6BB5' : '#D97706'};font-family:monospace;font-weight:600">${coords}</div>
+      <div style="font-size:10px;color:#64748B;margin-bottom:3px;white-space:nowrap">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</div>
+      <div style="font-size:9.5px;color:${v.lat && parseFloat(v.lat)!==0 ? '#1B6BB5' : '#D97706'};font-family:monospace;font-weight:600;white-space:nowrap">${coords}</div>
     </div>
   `
 }
@@ -123,7 +125,7 @@ export default function LiveTracking() {
   const gmap       = useRef(null)
   const markers    = useRef({})
   const pulses     = useRef({})
-  const infoWin    = useRef(null)
+  const infoWins   = useRef({})   // one small InfoWindow per vehicle, always open
   // Remember the user's last map-type choice (satellite vs roadmap) per
   // browser, and default to satellite on first visit. Wrapped in try/catch
   // since localStorage can throw or be unavailable in some contexts.
@@ -161,23 +163,28 @@ export default function LiveTracking() {
       } else {
         const m = new window.google.maps.Marker({ position:{lat,lng}, map:gmap.current, icon, title:v.name })
         m.addListener('click', ()=>{
-          const cur  = markers.current[v.imei].getPosition()
-          const pos  = { lat: cur.lat(), lng: cur.lng() }
+          const cur = markers.current[v.imei].getPosition()
           setSelected(v)
-          gmap.current.panTo(pos)
+          gmap.current.panTo({ lat: cur.lat(), lng: cur.lng() })
           gmap.current.setZoom(16)
-          if (!infoWin.current) infoWin.current = new window.google.maps.InfoWindow()
-          infoWin.current._imei = v.imei
-          infoWin.current.setContent(mkInfoHtml(v))
-          infoWin.current.setPosition(pos)
-          infoWin.current.open(gmap.current)
         })
         markers.current[v.imei] = m
+
+        // Small info bubble, shown automatically as soon as the marker
+        // exists — no click needed — and kept tight to the pin.
+        const iw = new window.google.maps.InfoWindow({
+          content: mkInfoHtml(v),
+          position: { lat, lng },
+          pixelOffset: new window.google.maps.Size(0, -4),
+          disableAutoPan: true,
+        })
+        iw.open({ map: gmap.current, shouldFocus: false })
+        infoWins.current[v.imei] = iw
       }
-      // Keep an already-open info bubble in sync with live position/data
-      if (infoWin.current?._imei === v.imei) {
-        infoWin.current.setContent(mkInfoHtml(v))
-        infoWin.current.setPosition({ lat, lng })
+      // Keep the always-open info bubble in sync with live position/data
+      if (infoWins.current[v.imei]) {
+        infoWins.current[v.imei].setContent(mkInfoHtml(v))
+        infoWins.current[v.imei].setPosition({ lat, lng })
       }
       if (isMoving) {
         if (pulses.current[v.imei]) pulses.current[v.imei].setCenter(lat,lng)
@@ -223,14 +230,8 @@ export default function LiveTracking() {
   const focus = v => {
     setSelected(v)
     if(gmap.current&&v.lat&&parseFloat(v.lat)!==0){
-      const pos = { lat:parseFloat(v.lat), lng:parseFloat(v.lng) }
-      gmap.current.panTo(pos)
+      gmap.current.panTo({ lat:parseFloat(v.lat), lng:parseFloat(v.lng) })
       gmap.current.setZoom(16)
-      if (!infoWin.current) infoWin.current = new window.google.maps.InfoWindow()
-      infoWin.current._imei = v.imei
-      infoWin.current.setContent(mkInfoHtml(v))
-      infoWin.current.setPosition(pos)
-      infoWin.current.open(gmap.current)
     }
   }
 
@@ -486,7 +487,7 @@ export default function LiveTracking() {
                       </div>
                     </div>
 
-                    <button onClick={()=>{ setSelected(null); infoWin.current?.close() }}
+                    <button onClick={()=>setSelected(null)}
                       style={{ width:30, height:30, borderRadius:8, background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.12)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'rgba(255,255,255,.6)', flexShrink:0 }}>
                       <X size={14}/>
                     </button>
