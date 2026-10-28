@@ -378,6 +378,7 @@ export default function History() {
           lat:   parseFloat(log.latitude),
           lng:   parseFloat(log.longitude),
           speed: parseFloat(log.speed) || 0,
+          ts:    new Date(log.timestamp).getTime(),
           time:  new Date(log.timestamp).toLocaleTimeString('en-GB', {
                    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Phnom_Penh',
                  }),
@@ -406,26 +407,46 @@ export default function History() {
   // The marker glides smoothly to each next point (instead of teleporting),
   // rotates to face the direction of travel, extends the bright "traveled"
   // trail, and the camera eases along with it.
+  //
+  // Real fixes aren't evenly spaced — gaps range from ~10s to several
+  // minutes (signal loss, device sleep, etc). Stepping through them on a
+  // flat timer made far-apart points "jump" rather than glide, since the
+  // on-screen distance covered per tick had nothing to do with how far
+  // apart (in time and space) those points actually were. Instead, each
+  // step's on-screen duration scales with the real gap to the next fix
+  // (compressed and clamped so a multi-minute gap doesn't stall playback,
+  // and a near-instant gap still glides instead of flashing).
   useEffect(() => {
-    clearInterval(timerRef.current)
+    clearTimeout(timerRef.current)
     if (pulseRef.current) pulseRef.current.setMap(playing ? gmapRef.current : null)
-    if (!playing || !route.length) return
-    const interval = 500 / speed
-    timerRef.current = setInterval(() => {
-      setRouteIdx(prev => {
-        const n = prev + 1
-        if (n >= route.length) { setPlaying(false); return prev }
-        if (window.google?.maps) {
-          const course = bearing(route[prev], route[n])
-          markerRef.current?.setIcon(vehicleIcon(course, route[n].speed > 60 ? '#F59E0B' : C.accent))
-          glideMarker(route[n], Math.min(interval * .92, 900))
-          updateTrail(route, n)
-          gmapRef.current?.panTo(route[n])
-        }
-        return n
-      })
-    }, interval)
-    return () => clearInterval(timerRef.current)
+    if (!playing || route.length < 2) return
+    let cancelled = false
+    const MIN_STEP = 350   // ms — floor, so even a 1s real gap still glides visibly
+    const MAX_STEP = 2200  // ms — ceiling, so a multi-minute real gap doesn't stall playback
+    const stepDuration = (prev, n) => {
+      const realGapSec = route[prev]?.ts && route[n]?.ts
+        ? Math.max(0, (route[n].ts - route[prev].ts) / 1000)
+        : 10
+      // ~55ms of on-screen playback per real second of gap, then speed-scaled
+      return Math.min(Math.max((realGapSec * 55) / speed, MIN_STEP), MAX_STEP)
+    }
+    const advance = (prev) => {
+      const n = prev + 1
+      if (n >= route.length) { setPlaying(false); return }
+      const dur = stepDuration(prev, n)
+      if (window.google?.maps) {
+        const course = bearing(route[prev], route[n])
+        markerRef.current?.setIcon(vehicleIcon(course, route[n].speed > 60 ? '#F59E0B' : C.accent))
+        glideMarker(route[n], Math.min(dur * .92, dur))
+        updateTrail(route, n)
+        gmapRef.current?.panTo(route[n])
+      }
+      setRouteIdx(n)
+      if (!cancelled) timerRef.current = setTimeout(() => advance(n), dur)
+    }
+    timerRef.current = setTimeout(() => advance(routeIdx), stepDuration(routeIdx, routeIdx + 1))
+    return () => { cancelled = true; clearTimeout(timerRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, speed, route])
 
   // Keep the route-log scrolled to the active point while playback runs
@@ -563,15 +584,18 @@ export default function History() {
             </div>
           ) : (
             <div style={{ flex:1, overflowY:'auto' }}>
-              {route.map((pt, i) => (
+              {/* Newest fix first (top), oldest last (bottom) — the
+                  timeline dot/line visually flows downward toward the
+                  past, matching the reversed order. */}
+              {route.map((pt, i) => i).reverse().map(i => { const pt = route[i]; return (
                 <div key={i} ref={el => rowRefs.current[i] = el} onClick={() => moveTo(i)}
-                  style={{ display:'flex', gap:10, padding:'10px 14px', borderBottom: i < route.length-1 ? '1px solid #F8FAFC' : 'none', cursor:'pointer', background: routeIdx===i ? C.accentL : 'transparent', borderLeft:'3px solid '+(routeIdx===i ? C.accent : 'transparent'), transition:'all .15s' }}
+                  style={{ display:'flex', gap:10, padding:'10px 14px', borderBottom: i > 0 ? '1px solid #F8FAFC' : 'none', cursor:'pointer', background: routeIdx===i ? C.accentL : 'transparent', borderLeft:'3px solid '+(routeIdx===i ? C.accent : 'transparent'), transition:'all .15s' }}
                   onMouseEnter={e => { if (routeIdx!==i) e.currentTarget.style.background=C.bg }}
                   onMouseLeave={e => { if (routeIdx!==i) e.currentTarget.style.background='transparent' }}>
                   {/* Timeline dot */}
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', flexShrink:0 }}>
                     <div style={{ width:10, height:10, borderRadius:'50%', background: pt.event==='Start'?C.green:pt.event==='Stop'?C.red:pt.event==='Overspeed'?'#F59E0B':pt.speed===0?C.muted:C.accent, flexShrink:0, marginTop:2 }}/>
-                    {i < route.length-1 && <div style={{ width:2, flex:1, background:'#E2E8F0', marginTop:3, minHeight:16 }}/>}
+                    {i > 0 && <div style={{ width:2, flex:1, background:'#E2E8F0', marginTop:3, minHeight:16 }}/>}
                   </div>
                   {/* Info */}
                   <div style={{ flex:1, minWidth:0 }}>
@@ -591,7 +615,7 @@ export default function History() {
                     </div>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </div>
