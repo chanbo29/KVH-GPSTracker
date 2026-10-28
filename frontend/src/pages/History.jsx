@@ -212,7 +212,7 @@ export default function History() {
   const { data:vehicles, loading:vehiclesLoading } = useApi(api.vehicles.list)
 
   const [selectedIMEI, setSelectedIMEI] = useState('')
-  const [selectedDate, setSelectedDate] = useState('2026-09-10') // matches MOCK_HISTORY's most recent entry
+  const [selectedDate, setSelectedDate] = useState(todayStr())
   const [route,        setRoute]        = useState([])
   const [routeIdx,     setRouteIdx]     = useState(0)
   const [playing,      setPlaying]      = useState(false)
@@ -372,15 +372,28 @@ export default function History() {
   // ── Load Route (with loading state) ─────────────────────────
   const loadRoute = () => {
     setRouteLoading(true)
-    // Simulate a small async fetch (replace with real API call when ready)
-    setTimeout(() => {
-      const data = MOCK_HISTORY[selectedIMEI]?.[selectedDate] || []
-      setRoute(data)
-      setRouteIdx(0)
-      setPlaying(false)
-      if (data.length > 0 && mapReady) drawRoute(data)
-      setRouteLoading(false)
-    }, 600)
+    api.vehicles.history(selectedIMEI, selectedDate)
+      .then(logs => {
+        const data = (logs || []).map((log, i, arr) => ({
+          lat:   log.latitude,
+          lng:   log.longitude,
+          speed: log.speed,
+          time:  new Date(log.timestamp).toLocaleTimeString('en-GB', {
+                   hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Phnom_Penh',
+                 }),
+          event: i === 0 ? 'Start' : i === arr.length - 1 ? 'Stop' : '',
+        }))
+        setRoute(data)
+        setRouteIdx(0)
+        setPlaying(false)
+        if (data.length > 0 && mapReady) drawRoute(data)
+      })
+      .catch(() => {
+        setRoute([])
+        setRouteIdx(0)
+        setPlaying(false)
+      })
+      .finally(() => setRouteLoading(false))
   }
 
   // Auto-load when vehicle/date changes (existing behaviour)
