@@ -64,12 +64,13 @@ function mkIcon(status, course = 0) {
   }
 }
 
-// HTML content for the on-map info bubble that sits above a vehicle's pin at
-// all times — driver name, status, vehicle + plate, and live coordinates,
-// right where the user is looking instead of only in the sidebar /
-// bottom-right card. Styled as a small, polished card (status pill, subtle
-// icons, clear hierarchy) matching the app's navy/blue palette, and kept
-// compact since it's always visible rather than only shown on click.
+// HTML content for the on-map info bubble that floats above a vehicle's pin
+// at all times — driver name, status, vehicle + plate, and live
+// coordinates, right where the user is looking instead of only in the
+// sidebar / bottom-right card. This is the *inner* card only; VehicleLabel
+// (below) wraps it in a positioned, animated container with a pointer tail
+// — it deliberately does NOT use google.maps.InfoWindow, whose fixed white
+// chrome and oversized default close button can't be restyled away.
 function mkInfoHtml(v) {
   const s = st(v.status)
   const hasDriver = v.owner && v.owner !== 'Unassigned'
@@ -78,36 +79,97 @@ function mkInfoHtml(v) {
     ? `${Number(v.lat).toFixed(5)}, ${Number(v.lng).toFixed(5)}`
     : 'No GPS signal'
   const coordColor = hasFix ? '#1B6BB5' : '#D97706'
+  // Just the inner rows — VehicleLabel wraps this once in a persistent
+  // .kvh-bubble card on creation, and only swaps this inner HTML on later
+  // updates, so the bouncy entrance animation plays once per vehicle
+  // (on first fix) rather than replaying on every 5s refresh.
   return `
-    <div style="font-family:'Inter',system-ui,-apple-system,sans-serif;min-width:150px;padding:1px 1px 2px">
-
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
-        <span style="font-weight:800;font-size:12px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasDriver ? v.owner : '— No driver —'}</span>
-        <span style="display:flex;align-items:center;gap:3px;background:${s.bg};padding:2px 6px;border-radius:20px;flex-shrink:0">
-          <span style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px">
+        <span style="font-weight:800;font-size:12.5px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasDriver ? v.owner : '— No driver —'}</span>
+        <span style="display:flex;align-items:center;gap:4px;background:${s.bg};padding:3px 7px;border-radius:20px;flex-shrink:0">
+          <span class="${v.status==='moving'?'kvh-dot-live':''}" style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
           <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>
         </span>
       </div>
 
-      <div style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
           <path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"/>
           <rect x="3" y="11" width="18" height="6" rx="1.5"/>
           <circle cx="7.5" cy="17.5" r="1.4"/>
           <circle cx="16.5" cy="17.5" r="1.4"/>
         </svg>
-        <span style="font-size:10px;color:#64748B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</span>
+        <span style="font-size:10.5px;color:#64748B;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</span>
       </div>
 
-      <div style="display:flex;align-items:center;gap:5px;padding-top:5px;border-top:1px solid #EEF2F7">
-        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="${coordColor}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px dashed #E2E8F0">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${coordColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
           <path d="M12 22s7-7.5 7-12.5A7 7 0 0 0 5 9.5C5 14.5 12 22 12 22z"/>
           <circle cx="12" cy="9.5" r="2.3"/>
         </svg>
-        <span style="font-size:9.5px;color:${coordColor};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;white-space:nowrap">${coords}</span>
+        <span style="font-size:10px;color:${coordColor};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;white-space:nowrap">${coords}</span>
       </div>
-    </div>
   `
+}
+
+// Custom floating label overlay — replaces google.maps.InfoWindow so we get
+// full control of the look (rounded card, drop shadow, pointer tail, no
+// default close button) and smooth animated repositioning as the vehicle
+// moves. Built lazily since google.maps.OverlayView only exists once the
+// Maps JS API has loaded.
+let VehicleLabelClass = null
+function getVehicleLabelClass() {
+  if (VehicleLabelClass) return VehicleLabelClass
+  class VehicleLabel extends window.google.maps.OverlayView {
+    constructor(map, position, html) {
+      super()
+      this.position = position
+      this.div  = null   // positioned wrapper (no visual style)
+      this.card = null   // persistent .kvh-bubble element — created once,
+                          // so its entrance animation plays only on first
+                          // fix for this vehicle, not on every data refresh
+      this.html = html
+      this.setMap(map)
+    }
+    onAdd() {
+      const div = document.createElement('div')
+      div.style.position = 'absolute'
+      div.style.transform = 'translate(-50%, calc(-100% - 15px))'
+      div.style.transition = 'left .9s cubic-bezier(.4,0,.2,1), top .9s cubic-bezier(.4,0,.2,1)'
+      div.style.zIndex = '45'
+
+      const card = document.createElement('div')
+      card.className = 'kvh-bubble'
+      card.innerHTML = this.html
+      div.appendChild(card)
+
+      this.div  = div
+      this.card = card
+      this.getPanes().floatPane.appendChild(div)
+      this.draw()
+    }
+    draw() {
+      if (!this.div) return
+      const proj = this.getProjection()
+      if (!proj) return
+      const pt = proj.fromLatLngToDivPixel(new window.google.maps.LatLng(this.position))
+      if (!pt) return
+      this.div.style.left = pt.x + 'px'
+      this.div.style.top = pt.y + 'px'
+    }
+    update(position, html) {
+      this.position = position
+      if (this.card) this.card.innerHTML = html
+      this.draw()
+    }
+    onRemove() {
+      if (this.div?.parentNode) this.div.parentNode.removeChild(this.div)
+      this.div = null
+      this.card = null
+    }
+  }
+  VehicleLabelClass = VehicleLabel
+  return VehicleLabelClass
 }
 
 // Pulsing green ring behind a moving vehicle — a google.maps.Circle whose
@@ -148,7 +210,7 @@ export default function LiveTracking() {
   const gmap       = useRef(null)
   const markers    = useRef({})
   const pulses     = useRef({})
-  const infoWins   = useRef({})   // one small InfoWindow per vehicle, always open
+  const infoWins   = useRef({})   // one VehicleLabel overlay per vehicle, always visible
   // Remember the user's last map-type choice (satellite vs roadmap) per
   // browser, and default to satellite on first visit. Wrapped in try/catch
   // since localStorage can throw or be unavailable in some contexts.
@@ -193,21 +255,14 @@ export default function LiveTracking() {
         })
         markers.current[v.imei] = m
 
-        // Small info bubble, shown automatically as soon as the marker
-        // exists — no click needed — and kept tight to the pin.
-        const iw = new window.google.maps.InfoWindow({
-          content: mkInfoHtml(v),
-          position: { lat, lng },
-          pixelOffset: new window.google.maps.Size(0, -4),
-          disableAutoPan: true,
-        })
-        iw.open({ map: gmap.current, shouldFocus: false })
-        infoWins.current[v.imei] = iw
+        // Custom floating label, shown automatically as soon as the marker
+        // exists — no click needed — gliding smoothly with the pin.
+        const LabelCls = getVehicleLabelClass()
+        infoWins.current[v.imei] = new LabelCls(gmap.current, { lat, lng }, mkInfoHtml(v))
       }
-      // Keep the always-open info bubble in sync with live position/data
+      // Keep the always-visible label in sync with live position/data
       if (infoWins.current[v.imei]) {
-        infoWins.current[v.imei].setContent(mkInfoHtml(v))
-        infoWins.current[v.imei].setPosition({ lat, lng })
+        infoWins.current[v.imei].update({ lat, lng }, mkInfoHtml(v))
       }
       if (isMoving) {
         if (pulses.current[v.imei]) pulses.current[v.imei].setCenter(lat,lng)
@@ -272,6 +327,43 @@ export default function LiveTracking() {
         .kvh-sc::-webkit-scrollbar{width:3px}
         .kvh-sc::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
         .kvh-vrow:hover{ background:#F8FAFC !important; border-color:#E2E8F0 !important; }
+
+        /* Floating vehicle label (VehicleLabel overlay) — bouncy entrance,
+           no Google chrome, a soft shadow + dashed divider, and a small
+           pointer tail aimed straight at the pin below it. */
+        @keyframes kvhBubbleIn {
+          0%   { opacity:0; transform:scale(.7) translateY(8px); }
+          55%  { opacity:1; transform:scale(1.06) translateY(-3px); }
+          80%  { transform:scale(.98) translateY(0); }
+          100% { opacity:1; transform:scale(1) translateY(0); }
+        }
+        @keyframes kvhDotLive {
+          0%,100% { box-shadow:0 0 0 0 rgba(34,197,94,.5); }
+          50%     { box-shadow:0 0 0 4px rgba(34,197,94,0); }
+        }
+        .kvh-bubble {
+          position:relative;
+          font-family:'Inter',system-ui,-apple-system,sans-serif;
+          min-width:156px;
+          background:#fff;
+          border-radius:13px;
+          padding:10px 12px 9px;
+          border:1px solid rgba(226,232,240,.9);
+          box-shadow:0 10px 28px rgba(15,23,42,.16), 0 2px 6px rgba(15,23,42,.07);
+          animation:kvhBubbleIn .38s cubic-bezier(.34,1.56,.64,1);
+          cursor:default;
+        }
+        .kvh-bubble::after{
+          content:'';
+          position:absolute; left:50%; bottom:-6px;
+          width:11px; height:11px; margin-left:-5.5px;
+          background:#fff;
+          border-right:1px solid rgba(226,232,240,.9);
+          border-bottom:1px solid rgba(226,232,240,.9);
+          transform:rotate(45deg);
+          border-radius:0 0 2px 0;
+        }
+        .kvh-dot-live{ animation:kvhDotLive 1.6s ease-out infinite; }
       `}</style>
 
       {/* ════════════════════════════════════════════════════
