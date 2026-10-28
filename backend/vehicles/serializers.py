@@ -15,15 +15,16 @@ class VehicleSerializer(serializers.ModelSerializer):
     lng         = serializers.SerializerMethodField()
     speed       = serializers.SerializerMethodField()
     last_update = serializers.SerializerMethodField()
+    status_since = serializers.SerializerMethodField()
 
     class Meta:
         model  = Vehicle
         fields = ['vehicle_id', 'imei', 'name', 'type', 'plate',
                   'brand', 'model', 'owner', 'status', 'battery', 'signal',
-                  'lat', 'lng', 'speed', 'last_update',
+                  'lat', 'lng', 'speed', 'last_update', 'status_since',
                   'created_at', 'updated_at']
         read_only_fields = ['vehicle_id', 'created_at', 'updated_at',
-                            'lat', 'lng', 'speed', 'last_update']
+                            'lat', 'lng', 'speed', 'last_update', 'status_since']
         extra_kwargs = {
             'imei':    { 'required': False, 'allow_null': True, 'allow_blank': True, 'default': None },
             'brand':   { 'required': False, 'default': '',            'allow_blank': True },
@@ -57,6 +58,9 @@ class VehicleSerializer(serializers.ModelSerializer):
     def get_last_update(self, obj):
         log = obj.latest_log
         return log.timestamp.strftime('%H:%M:%S') if log else None
+
+    def get_status_since(self, obj):
+        return obj.status_since.isoformat() if obj.status_since else None
 
 
 class ReceiveGPSSerializer(serializers.Serializer):

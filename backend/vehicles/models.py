@@ -11,6 +11,7 @@ class Vehicle(models.Model):
     model      = models.CharField(max_length=100, db_column='Model',  default='')
     owner = models.CharField(max_length=100, db_column='Owner', default='Unassigned', blank=True)
     status     = models.CharField(max_length=20,  db_column='Status', default='parked')
+    status_since = models.DateTimeField(null=True, blank=True, db_column='StatusSince')
     battery    = models.SmallIntegerField(default=100, db_column='Battery')
     signal     = models.SmallIntegerField(default=4,   db_column='Signal')
     created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')

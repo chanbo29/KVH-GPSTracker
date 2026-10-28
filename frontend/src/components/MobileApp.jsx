@@ -42,6 +42,27 @@ const tStatus = s => t('status.'+String(s||'').toLowerCase()) !== 'status.'+Stri
 /** On phone we lead with the assigned driver's name, not the vehicle's own name/model. */
 const dName = v => (v.owner && v.owner!=='Unassigned') ? v.owner : t('mobile.unassigned')
 
+// "Stopped 23m" / "1h 12m" / "2d 4h" — how long a vehicle has held its
+// current status, from status_since. Only meaningful for a vehicle that
+// isn't moving.
+function sinceLabel(iso) {
+  if (!iso) return ''
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!isFinite(ms) || ms < 0) return ''
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return '<1m'
+  if (mins < 60) return `${mins}m`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ${mins % 60}m`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ${hrs % 24}h`
+}
+const sinceSuffix = v => {
+  if (!v || v.status === 'moving') return ''
+  const since = sinceLabel(v.status_since)
+  return since ? ' · ' + since : ''
+}
+
 /* ── Loading components ─────────────────────────────────────── */
 const PULSE_CSS = `
 @keyframes kvh-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
@@ -341,7 +362,7 @@ function HomeScreen({ user, onNav }) {
                     <div style={{ color:C.navy, fontWeight:700, fontSize:14, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{dName(v)}</div>
                     <div style={{ color:C.muted, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{v.name} · {v.plate} · {Math.round(v.speed||0)} km/h</div>
                   </div>
-                  <Pill label={tStatus(v.status)} color={sc(v.status)} bg={sb(v.status)}/>
+                  <Pill label={tStatus(v.status)+sinceSuffix(v)} color={sc(v.status)} bg={sb(v.status)}/>
                 </Row>
               </Card>
             ))}
@@ -512,7 +533,7 @@ function TrackingScreen() {
                 <div style={{ color:C.navy, fontWeight:800, fontSize:15, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{dName(sel)}</div>
                 <div style={{ color:C.muted, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{sel.name} · {sel.plate}</div>
               </div>
-              <Pill label={tStatus(sel.status)} color={sc(sel.status)} bg={sb(sel.status)}/>
+              <Pill label={tStatus(sel.status)+sinceSuffix(sel)} color={sc(sel.status)} bg={sb(sel.status)}/>
               <button onClick={()=>setSel(null)} aria-label={t('common.close')}
                 style={{ width:34, height:34, borderRadius:17, border:'none', background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}>
                 <X size={16} color={C.muted}/>
@@ -567,7 +588,7 @@ function TrackingScreen() {
                     <div style={{ color:C.navy, fontWeight:700, fontSize:14, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{dName(v)}</div>
                     <div style={{ color:C.muted, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{v.name} · {v.plate} · {Math.round(v.speed||0)} km/h</div>
                   </div>
-                  <Pill label={tStatus(v.status)} color={sc(v.status)} bg={sb(v.status)}/>
+                  <Pill label={tStatus(v.status)+sinceSuffix(v)} color={sc(v.status)} bg={sb(v.status)}/>
                   <ChevronRight size={16} color={C.faint} style={{ flexShrink:0 }}/>
                 </div>
               </button>
@@ -612,7 +633,7 @@ function VehiclesScreen() {
                       <div style={{ color:C.navy, fontWeight:800, fontSize:15, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{dName(v)}</div>
                       <div style={{ color:C.muted, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{v.name} · {v.plate}</div>
                     </div>
-                    <Pill label={tStatus(v.status)} color={sc(v.status)} bg={sb(v.status)}/>
+                    <Pill label={tStatus(v.status)+sinceSuffix(v)} color={sc(v.status)} bg={sb(v.status)}/>
                   </Row>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6 }}>
                     {[[t('mobile.speed'),Math.round(v.speed||0)+' km/h',Gauge,v.speed>0?C.green:C.faint],[t('mobile.battery'),v.battery+'%',Battery,v.battery<20?C.red:C.green],[t('mobile.signal'),v.signal+'/5',Wifi,C.blue],['IMEI','..'+v.imei?.slice(-4),Cpu,C.muted]].map(([l,val,Icon,col])=>(

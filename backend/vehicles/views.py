@@ -105,11 +105,13 @@ class VehicleViewSet(viewsets.ModelViewSet):
             timestamp  = timezone.now(),
         )
         new_status = 'moving' if d['speed'] > 5 else 'stopped'
-        Vehicle.objects.filter(imei=d['imei']).update(
-            status  = new_status,
-            battery = d['battery'],
-            signal  = d['signal'],
-        )
+        # status_since only moves forward when the status actually changes,
+        # so "stopped for ..." on the frontend measures from the moment the
+        # vehicle actually stopped, not from the last GPS update.
+        update_fields = {'status': new_status, 'battery': d['battery'], 'signal': d['signal']}
+        if vehicle.status != new_status or not vehicle.status_since:
+            update_fields['status_since'] = timezone.now()
+        Vehicle.objects.filter(imei=d['imei']).update(**update_fields)
         return Response({'status': 'ok', 'imei': d['imei']})
 
     @action(detail=False, methods=['get'])

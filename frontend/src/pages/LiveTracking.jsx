@@ -33,6 +33,21 @@ const STATUS = {
 }
 const st = s => STATUS[s] || STATUS.offline
 
+// "Stopped 23m" / "Stopped 1h 12m" / "Stopped 2d 4h" — how long the vehicle
+// has held its current status, from Vehicle.status_since.
+function sinceLabel(iso) {
+  if (!iso) return ''
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!isFinite(ms) || ms < 0) return ''
+  const mins = Math.floor(ms / 60000)
+  if (mins < 1) return '<1m'
+  if (mins < 60) return `${mins}m`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ${mins % 60}m`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ${hrs % 24}h`
+}
+
 function animateMarker(marker, lat, lng, ms = 900) {
   const cur  = marker.getPosition()
   const from = { lat: cur.lat(), lng: cur.lng() }
@@ -79,6 +94,9 @@ function mkInfoHtml(v) {
     ? `${Number(v.lat).toFixed(5)}, ${Number(v.lng).toFixed(5)}`
     : 'No GPS signal'
   const coordColor = hasFix ? '#1B6BB5' : '#D97706'
+  // Only stopped/offline vehicles get a duration — a moving vehicle's
+  // "since" timer isn't meaningful here.
+  const since = v.status !== 'moving' ? sinceLabel(v.status_since) : ''
   // Just the inner rows — VehicleLabel wraps this once in a persistent
   // .kvh-bubble card on creation, and only swaps this inner HTML on later
   // updates, so the bouncy entrance animation plays once per vehicle
@@ -88,7 +106,7 @@ function mkInfoHtml(v) {
         <span style="font-weight:800;font-size:12.5px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasDriver ? v.owner : '— No driver —'}</span>
         <span style="display:flex;align-items:center;gap:4px;background:${s.bg};padding:3px 7px;border-radius:20px;flex-shrink:0">
           <span class="${v.status==='moving'?'kvh-dot-live':''}" style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
-          <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>
+          <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}${since ? ' · ' + since : ''}</span>
         </span>
       </div>
 
@@ -522,7 +540,7 @@ export default function LiveTracking() {
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10, paddingTop:8, borderTop:'1px solid '+T.border }}>
                     <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, fontWeight:700, color:s.color }}>
                       <span style={{ width:6, height:6, borderRadius:'50%', background:s.dot, display:'inline-block' }}/>
-                      {s.label}
+                      {s.label}{v.status !== 'moving' && sinceLabel(v.status_since) ? ' · ' + sinceLabel(v.status_since) : ''}
                     </span>
                     {v.lat && parseFloat(v.lat) !== 0
                       ? <span style={{ fontSize:11, color:T.faint, fontFamily:'monospace' }}>{Number(v.lat).toFixed(4)}, {Number(v.lng).toFixed(4)}</span>
@@ -598,7 +616,7 @@ export default function LiveTracking() {
                       <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
                         <Car size={11} color="rgba(255,255,255,.4)"/>
                         <span style={{ color:'rgba(255,255,255,.5)', fontSize:12 }}>{selected.name} · {selected.plate}</span>
-                        <span style={{ background:`${s.color}22`, color:s.color, fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20 }}>{s.label}</span>
+                        <span style={{ background:`${s.color}22`, color:s.color, fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20 }}>{s.label}{selected.status !== 'moving' && sinceLabel(selected.status_since) ? ' · ' + sinceLabel(selected.status_since) : ''}</span>
                       </div>
                     </div>
 
