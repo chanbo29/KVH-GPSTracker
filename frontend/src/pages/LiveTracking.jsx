@@ -407,10 +407,93 @@ export default function LiveTracking() {
     }
   }
 
+  // Zoom/pan to frame every vehicle that currently has a GPS fix, so the
+  // whole fleet is visible in one glance instead of hunting around the map.
+  const fitAll = () => {
+    if (!gmap.current || !window.google?.maps) return
+    const withFix = vehicles.filter(v => v.lat && parseFloat(v.lat) !== 0)
+    if (withFix.length === 0) return
+    if (withFix.length === 1) {
+      gmap.current.panTo({ lat:parseFloat(withFix[0].lat), lng:parseFloat(withFix[0].lng) })
+      gmap.current.setZoom(16)
+      return
+    }
+    const bounds = new window.google.maps.LatLngBounds()
+    withFix.forEach(v => bounds.extend({ lat:parseFloat(v.lat), lng:parseFloat(v.lng) }))
+    gmap.current.fitBounds(bounds, { top:60, right:60, bottom:60, left:open?60:60 })
+  }
+
   const list    = vehicles.filter(v=>(filter==='all'||v.status===filter)&&(!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.toLowerCase().includes(search.toLowerCase())||v.owner?.toLowerCase().includes(search.toLowerCase())))
   const moving  = vehicles.filter(v=>v.status==='moving').length
   const stopped = vehicles.filter(v=>v.status==='stopped').length
   const offline = vehicles.filter(v=>v.status==='offline').length
+
+  // One vehicle-list row — shared by the flat list (a status filter is
+  // active) and the grouped view (Moving/Stopped/Offline sections, shown
+  // when filter is "All" so a busy fleet is easier to scan at a glance).
+  const renderRow = v => {
+    const s    = st(v.status)
+    const isSel= selected?.imei === v.imei
+    const hasDriver = v.owner && v.owner !== 'Unassigned'
+    return (
+      <div key={v.imei}
+        className={isSel?'':'kvh-vrow'}
+        onClick={()=>focus(v)}
+        style={{ padding:'12px 12px', marginBottom:5, borderRadius:12, cursor:'pointer',
+          background: isSel ? T.blueL : 'white',
+          border:     isSel ? `1.5px solid ${T.blue}` : '1.5px solid '+T.border,
+          boxShadow:  isSel ? `0 2px 12px rgba(27,107,181,.12)` : '0 1px 2px rgba(0,0,0,.04)',
+        }}>
+
+        <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+
+          {/* Avatar — driver initials or car icon */}
+          <div style={{ position:'relative', flexShrink:0 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:s.bg, border:`1.5px solid ${s.color}33`, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:14, color:s.color }}>
+              {hasDriver
+                ? v.owner.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()
+                : <Car size={20} color={s.color}/>
+              }
+            </div>
+            <div style={{ position:'absolute', bottom:-2, right:-2, width:11, height:11, borderRadius:'50%', background:s.dot, border:'2.5px solid white' }}/>
+          </div>
+
+          {/* ── Driver name (primary) + Car below ── */}
+          <div style={{ flex:1, minWidth:0 }}>
+            {/* Driver name — primary label */}
+            <div style={{ fontWeight:700, fontSize:14, color:T.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {hasDriver ? v.owner : '— No driver —'}
+            </div>
+            {/* Car name + plate — secondary */}
+            <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
+              <Car size={11} color={T.faint}/>
+              <span style={{ fontSize:12, color:T.faint, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {v.name} · {v.plate}
+              </span>
+            </div>
+          </div>
+
+          {/* Speed */}
+          <div style={{ textAlign:'right', flexShrink:0 }}>
+            <div style={{ fontSize:18, fontWeight:900, color:v.speed>0?s.color:'#CBD5E1', lineHeight:1 }}>{Math.round(v.speed||0)}</div>
+            <div style={{ fontSize:10, color:T.faint, marginTop:2 }}>km/h</div>
+          </div>
+        </div>
+
+        {/* Status + coords */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10, paddingTop:8, borderTop:'1px solid '+T.border }}>
+          <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, fontWeight:700, color:s.color }}>
+            <span style={{ width:6, height:6, borderRadius:'50%', background:s.dot, display:'inline-block' }}/>
+            {s.label}{v.status !== 'moving' && sinceLabel(v.status_since) ? ' · ' + sinceLabel(v.status_since) : ''}
+          </span>
+          {v.lat && parseFloat(v.lat) !== 0
+            ? <span style={{ fontSize:11, color:T.faint, fontFamily:'monospace' }}>{Number(v.lat).toFixed(4)}, {Number(v.lng).toFixed(4)}</span>
+            : <span style={{ fontSize:11, color:'#CBD5E1' }}>No GPS signal</span>
+          }
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ position:'relative', width:'100%', height:'100%', fontFamily:"'Inter',system-ui,-apple-system,sans-serif", overflow:'hidden', display:'flex' }}>
@@ -420,7 +503,8 @@ export default function LiveTracking() {
         @keyframes kvhSlide{ from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
         .kvh-sc::-webkit-scrollbar{width:3px}
         .kvh-sc::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px}
-        .kvh-vrow:hover{ background:#F8FAFC !important; border-color:#E2E8F0 !important; }
+        .kvh-vrow:hover{ background:#F8FAFC !important; border-color:#E2E8F0 !important; transform:translateY(-1px); box-shadow:0 4px 14px rgba(15,23,42,.08) !important; }
+        .kvh-vrow{ transition:all .15s ease; }
 
         /* Floating vehicle label (VehicleLabel overlay) — bouncy entrance,
            no Google chrome, a soft shadow + dashed divider, and a small
@@ -563,69 +647,22 @@ export default function LiveTracking() {
                 <User size={32} color="#CBD5E1" style={{ margin:'0 auto 10px' }}/>
                 <div style={{ fontSize:13, color:T.faint }}>{search?`No results for "${search}"`:'No vehicles found'}</div>
               </div>
-            ) : list.map(v=>{
-              const s    = st(v.status)
-              const isSel= selected?.imei === v.imei
-              const hasDriver = v.owner && v.owner !== 'Unassigned'
-              return (
-                <div key={v.imei}
-                  className={isSel?'':'kvh-vrow'}
-                  onClick={()=>focus(v)}
-                  style={{ padding:'12px 12px', marginBottom:5, borderRadius:12, cursor:'pointer', transition:'all .15s',
-                    background: isSel ? T.blueL : 'white',
-                    border:     isSel ? `1.5px solid ${T.blue}` : '1.5px solid '+T.border,
-                    boxShadow:  isSel ? `0 2px 12px rgba(27,107,181,.12)` : '0 1px 2px rgba(0,0,0,.04)',
-                  }}>
-
-                  <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-
-                    {/* Avatar — driver initials or car icon */}
-                    <div style={{ position:'relative', flexShrink:0 }}>
-                      <div style={{ width:44, height:44, borderRadius:12, background:s.bg, border:`1.5px solid ${s.color}33`, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:14, color:s.color }}>
-                        {hasDriver
-                          ? v.owner.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()
-                          : <Car size={20} color={s.color}/>
-                        }
-                      </div>
-                      <div style={{ position:'absolute', bottom:-2, right:-2, width:11, height:11, borderRadius:'50%', background:s.dot, border:'2.5px solid white' }}/>
+            ) : filter !== 'all' ? list.map(renderRow) : (
+              [['moving','Moving'],['stopped','Stopped'],['offline','Offline']].map(([key,label]) => {
+                const group = list.filter(v => v.status === key)
+                if (group.length === 0) return null
+                return (
+                  <div key={key} style={{ marginBottom:4 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 4px 6px' }}>
+                      <span style={{ width:6, height:6, borderRadius:'50%', background:st(key).dot, flexShrink:0 }}/>
+                      <span style={{ fontSize:10, fontWeight:700, color:T.faint, letterSpacing:.6, textTransform:'uppercase' }}>{label}</span>
+                      <span style={{ fontSize:10, color:T.faint }}>· {group.length}</span>
                     </div>
-
-                    {/* ── Driver name (primary) + Car below ── */}
-                    <div style={{ flex:1, minWidth:0 }}>
-                      {/* Driver name — primary label */}
-                      <div style={{ fontWeight:700, fontSize:14, color:T.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {hasDriver ? v.owner : '— No driver —'}
-                      </div>
-                      {/* Car name + plate — secondary */}
-                      <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
-                        <Car size={11} color={T.faint}/>
-                        <span style={{ fontSize:12, color:T.faint, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                          {v.name} · {v.plate}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Speed */}
-                    <div style={{ textAlign:'right', flexShrink:0 }}>
-                      <div style={{ fontSize:18, fontWeight:900, color:v.speed>0?s.color:'#CBD5E1', lineHeight:1 }}>{Math.round(v.speed||0)}</div>
-                      <div style={{ fontSize:10, color:T.faint, marginTop:2 }}>km/h</div>
-                    </div>
+                    {group.map(renderRow)}
                   </div>
-
-                  {/* Status + coords */}
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10, paddingTop:8, borderTop:'1px solid '+T.border }}>
-                    <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, fontWeight:700, color:s.color }}>
-                      <span style={{ width:6, height:6, borderRadius:'50%', background:s.dot, display:'inline-block' }}/>
-                      {s.label}{v.status !== 'moving' && sinceLabel(v.status_since) ? ' · ' + sinceLabel(v.status_since) : ''}
-                    </span>
-                    {v.lat && parseFloat(v.lat) !== 0
-                      ? <span style={{ fontSize:11, color:T.faint, fontFamily:'monospace' }}>{Number(v.lat).toFixed(4)}, {Number(v.lng).toFixed(4)}</span>
-                      : <span style={{ fontSize:11, color:'#CBD5E1' }}>No GPS signal</span>
-                    }
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
 
           {/* ── Footer ───────────────────────────────────── */}
@@ -677,12 +714,20 @@ export default function LiveTracking() {
           {open ? <ChevronLeft size={14}/> : <ChevronRight size={14}/>}
         </button>
 
-        {/* ── Satellite toggle ──────────────────────────── */}
+        {/* ── Map toolbar: satellite toggle + fit-all-vehicles ──── */}
         {mapReady && (
-          <button onClick={toggleSat} title={sat?'Satellite view on':'Switch to satellite view'}
-            style={{ position:'absolute', left:16, bottom:20, zIndex:40, width:42, height:42, borderRadius:10, border:'none', background:sat?T.blue:'white', color:sat?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
-            <Layers size={17}/>
-          </button>
+          <div style={{ position:'absolute', left:16, bottom:20, zIndex:40, display:'flex', flexDirection:'column', gap:8 }}>
+            <button onClick={toggleSat} title={sat?'Satellite view on':'Switch to satellite view'}
+              style={{ width:42, height:42, borderRadius:10, border:'none', background:sat?T.blue:'white', color:sat?'white':T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'transform .15s' }}
+              onMouseEnter={e=>e.currentTarget.style.transform='scale(1.06)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
+              <Layers size={17}/>
+            </button>
+            <button onClick={fitAll} title="Fit all vehicles in view"
+              style={{ width:42, height:42, borderRadius:10, border:'none', background:'white', color:T.navy, boxShadow:'0 2px 10px rgba(0,0,0,.18)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'transform .15s' }}
+              onMouseEnter={e=>e.currentTarget.style.transform='scale(1.06)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
+              <Navigation size={16}/>
+            </button>
+          </div>
         )}
 
         {/* ── Selected vehicle card ─────────────────────── */}
@@ -690,7 +735,7 @@ export default function LiveTracking() {
           const s = st(selected.status)
           const hasDriver = selected.owner && selected.owner !== 'Unassigned'
           return (
-            <div style={{ position:'absolute', bottom:20, right:20, zIndex:40, width:340, animation:'kvhSlide .22s ease' }}>
+            <div style={{ position:'absolute', bottom:20, right:20, zIndex:40, width:340, maxWidth:'calc(100vw - 360px)', animation:'kvhSlide .22s ease' }}>
               <div style={{ background:'white', borderRadius:18, overflow:'hidden', boxShadow:'0 8px 40px rgba(0,0,0,.16)', border:'1px solid '+T.border }}>
 
                 {/* Navy header */}
