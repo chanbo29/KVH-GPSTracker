@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Cpu, X, Save, Wifi, Edit, Eye, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Cpu, X, Save, Wifi, Edit, Eye, Loader2, Copy, Check } from 'lucide-react'
 import { useApi } from '../hooks/useApi.js'
 import { api }    from '../api/client.js'
 import { LoadingStyles, Spinner, LoadingBar, SkeletonRows, SavingOverlay } from '../components/Loading.jsx'
@@ -9,6 +9,7 @@ const B='#1B6BB5', G='#059669', R='#DC2626', A='#D97706'
 const PROTOCOLS = ['GT06','TK103','H02','GT02','Other']
 const BLANK = { imei:'', model:'GPS', sim_number:'', vehicle:'', protocol:'GT06', gps_status:'offline' }
 const QUICK_BLANK = { imei:'', sim_number:'', protocol:'GT06' }
+const SMS_DEFAULT = { apn:'metfone', ip:'203.189.137.58', port:'5023', interval:'10' }
 
 export default function GPSDevices() {
   const { data:devices, setData:setDevices, loading } = useApi(api.devices.list)
@@ -23,6 +24,10 @@ export default function GPSDevices() {
   const [editId,  setEditId]  = useState(null)
   const [saving,  setSaving]  = useState(false)
   const [search,  setSearch]  = useState('')
+
+  /* Editable SMS config-command templates, saved per-device (by IMEI) in localStorage */
+  const [smsCfg,    setSmsCfg]    = useState(SMS_DEFAULT)
+  const [copiedCmd, setCopiedCmd] = useState('')
 
   /* Inline quick-add state */
   const [quick,      setQuick]      = useState(QUICK_BLANK)
@@ -98,7 +103,42 @@ export default function GPSDevices() {
       gps_status:  d.gps_status  || 'offline',
     })
     setEditId(d.device_id)
+    try {
+      const saved = JSON.parse(localStorage.getItem('kvh_sms_cfg_' + d.imei))
+      setSmsCfg(saved && typeof saved === 'object' ? { ...SMS_DEFAULT, ...saved } : SMS_DEFAULT)
+    } catch { setSmsCfg(SMS_DEFAULT) }
     setModal('edit')
+  }
+
+  /* Updates one SMS-template field and persists the whole set for this device,
+     so the next time this device is opened the same values are pre-filled. */
+  const fldSms = (k, v) => {
+    setSmsCfg(prev => {
+      const next = { ...prev, [k]: v }
+      try { localStorage.setItem('kvh_sms_cfg_' + form.imei, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  const copyCmd = async (label, text) => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      // Clipboard API unavailable/blocked — fall back to a hidden textarea + execCommand
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch { toast('Could not copy — select and copy manually', 'error'); return }
+    }
+    setCopiedCmd(label)
+    toast('Copied', 'success')
+    setTimeout(() => setCopiedCmd(c => c === label ? '' : c), 1500)
   }
 
   const closeModal = () => { setModal(false); setForm(BLANK); setEditId(null); setViewing(null) }
@@ -411,11 +451,48 @@ export default function GPSDevices() {
               </div>
 
               <div style={{ background:'#EFF6FF', borderRadius:10, padding:'14px', border:'1px solid #BFDBFE' }}>
-                <div style={{ color:B, fontWeight:700, fontSize:13, marginBottom:8 }}>📡 SMS commands — send to device SIM:</div>
-                {['APN#metfone#','803#203.189.137.58#5023#','805#10#','IMEI#'].map(cmd => (
-                  <div key={cmd} style={{ fontFamily:'monospace', fontSize:12, color:'#0F172A', background:'white', borderRadius:6, padding:'6px 10px', marginBottom:5 }}>{cmd}</div>
+                <div style={{ color:B, fontWeight:700, fontSize:13, marginBottom:10 }}>📡 SMS config commands — send to device SIM</div>
+
+                {/* Editable fields feeding the generated commands below */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:12 }}>
+                  <div>
+                    <label style={{ display:'block', fontSize:10.5, fontWeight:700, color:'#64748B', marginBottom:3, textTransform:'uppercase', letterSpacing:.4 }}>APN</label>
+                    <input value={smsCfg.apn} onChange={e => fldSms('apn', e.target.value)}
+                      style={{ width:'100%', padding:'7px 9px', border:'1px solid #BFDBFE', borderRadius:7, fontSize:12.5, outline:'none', boxSizing:'border-box', fontFamily:'monospace', background:'white' }}/>
+                  </div>
+                  <div>
+                    <label style={{ display:'block', fontSize:10.5, fontWeight:700, color:'#64748B', marginBottom:3, textTransform:'uppercase', letterSpacing:.4 }}>Report interval (sec)</label>
+                    <input value={smsCfg.interval} onChange={e => fldSms('interval', e.target.value.replace(/\D/g,''))}
+                      style={{ width:'100%', padding:'7px 9px', border:'1px solid #BFDBFE', borderRadius:7, fontSize:12.5, outline:'none', boxSizing:'border-box', fontFamily:'monospace', background:'white' }}/>
+                  </div>
+                  <div>
+                    <label style={{ display:'block', fontSize:10.5, fontWeight:700, color:'#64748B', marginBottom:3, textTransform:'uppercase', letterSpacing:.4 }}>Server IP</label>
+                    <input value={smsCfg.ip} onChange={e => fldSms('ip', e.target.value)}
+                      style={{ width:'100%', padding:'7px 9px', border:'1px solid #BFDBFE', borderRadius:7, fontSize:12.5, outline:'none', boxSizing:'border-box', fontFamily:'monospace', background:'white' }}/>
+                  </div>
+                  <div>
+                    <label style={{ display:'block', fontSize:10.5, fontWeight:700, color:'#64748B', marginBottom:3, textTransform:'uppercase', letterSpacing:.4 }}>Server port</label>
+                    <input value={smsCfg.port} onChange={e => fldSms('port', e.target.value.replace(/\D/g,''))}
+                      style={{ width:'100%', padding:'7px 9px', border:'1px solid #BFDBFE', borderRadius:7, fontSize:12.5, outline:'none', boxSizing:'border-box', fontFamily:'monospace', background:'white' }}/>
+                  </div>
+                </div>
+
+                {/* Generated commands — click to copy each one */}
+                {[
+                  ['apn',      `APN#${smsCfg.apn}#`],
+                  ['server',   `803#${smsCfg.ip}#${smsCfg.port}#`],
+                  ['interval', `805#${smsCfg.interval}#`],
+                  ['imei',     'IMEI#'],
+                ].map(([key, cmd]) => (
+                  <button key={key} onClick={() => copyCmd(key, cmd)} title="Click to copy"
+                    style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, fontFamily:'monospace', fontSize:12, color:'#0F172A', background:'white', border:'1px solid transparent', borderRadius:6, padding:'7px 10px', marginBottom:5, cursor:'pointer', textAlign:'left' }}>
+                    <span>{cmd}</span>
+                    {copiedCmd === key
+                      ? <Check size={13} color={G} style={{ flexShrink:0 }}/>
+                      : <Copy size={13} color="#94A3B8" style={{ flexShrink:0 }}/>}
+                  </button>
                 ))}
-                <div style={{ color:'#64748B', fontSize:11, marginTop:4 }}>Send each command as a separate SMS to your GPS SIM card</div>
+                <div style={{ color:'#64748B', fontSize:11, marginTop:4 }}>Tap a command to copy it, then send it as a separate SMS to your GPS SIM card. These fields are remembered for this device next time.</div>
               </div>
             </div>
 
