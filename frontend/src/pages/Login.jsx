@@ -125,7 +125,7 @@ export default function Login({ onLogin, loading, error }) {
                   placeholder={t('login.usernamePlaceholder')}
                   autoComplete="username"
                   autoFocus
-                  style={{ flex:1, padding:'13px 14px 13px 0', border:'none', outline:'none', fontSize:14, color:NAVY, background:'transparent' }}
+                  style={{ flex:1, padding:'13px 14px 13px 0', border:'none', outline:'none', fontSize:16, color:NAVY, background:'transparent' }}
                 />
               </div>
             </div>
@@ -154,7 +154,7 @@ export default function Login({ onLogin, loading, error }) {
                   onBlur={()  => setFocusP(false)}
                   placeholder={t('login.passwordPlaceholder')}
                   autoComplete="current-password"
-                  style={{ flex:1, padding:'13px 0', border:'none', outline:'none', fontSize:14, color:NAVY, background:'transparent' }}
+                  style={{ flex:1, padding:'13px 0', border:'none', outline:'none', fontSize:16, color:NAVY, background:'transparent' }}
                 />
                 <button
                   type="button"

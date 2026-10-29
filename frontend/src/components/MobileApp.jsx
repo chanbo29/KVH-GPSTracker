@@ -274,7 +274,7 @@ const SearchBar = ({ value, onChange, placeholder='Search...' }) => (
   <div style={{ display:'flex', gap:8, alignItems:'center', background:C.card, borderRadius:12, padding:'10px 14px', border:'1px solid '+C.border }}>
     <Search size={15} color={C.faint}/>
     <input value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-      style={{ flex:1, border:'none', outline:'none', fontSize:14, color:C.navy, background:'none' }}/>
+      style={{ flex:1, border:'none', outline:'none', fontSize:16, color:C.navy, background:'none' }}/>
   </div>
 )
 const Field = ({ label, hint, children }) => (
@@ -288,11 +288,11 @@ const Field = ({ label, hint, children }) => (
 )
 const TInput = ({ value, onChange, placeholder, type='text', mono }) => (
   <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
-    style={{ width:'100%', padding:'13px 14px', border:'1px solid '+C.border, borderRadius:10, fontSize:15, color:C.navy, outline:'none', boxSizing:'border-box', fontFamily:mono?'monospace':'inherit', background:'white' }}/>
+    style={{ width:'100%', padding:'13px 14px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none', boxSizing:'border-box', fontFamily:mono?'monospace':'inherit', background:'white' }}/>
 )
 const TSelect = ({ value, onChange, children }) => (
   <select value={value} onChange={e=>onChange(e.target.value)}
-    style={{ width:'100%', padding:'13px 14px', border:'1px solid '+C.border, borderRadius:10, fontSize:15, color:C.navy, outline:'none', background:'white', boxSizing:'border-box' }}>
+    style={{ width:'100%', padding:'13px 14px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none', background:'white', boxSizing:'border-box' }}>
     {children}
   </select>
 )
@@ -1147,7 +1147,7 @@ function UsersScreen({ onBack }) {
           <Field label="Password *">
             <div style={{ position:'relative' }}>
               <input type={showPass?'text':'password'} value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder="Set password"
-                style={{ width:'100%', padding:'13px 48px 13px 14px', border:'1px solid '+C.border, borderRadius:10, fontSize:15, color:C.navy, outline:'none', boxSizing:'border-box' }}/>
+                style={{ width:'100%', padding:'13px 48px 13px 14px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none', boxSizing:'border-box' }}/>
               <button type="button" onClick={()=>setShowPass(p=>!p)} style={{ position:'absolute', right:14, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', cursor:'pointer', color:C.faint, display:'flex' }}>
                 {showPass?<EyeOff size={18}/>:<Eye size={18}/>}
               </button>
@@ -1326,11 +1326,11 @@ function HistoryScreen({ onBack }) {
       <Bar title={t('nav.history')} onBack={onBack} loading={vL}/>
       <div style={{ background:C.card, padding:'10px 14px', borderBottom:'1px solid '+C.border, flexShrink:0 }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, marginBottom:8 }}>
-          <select value={imei} onChange={e=>setImei(e.target.value)} style={{ padding:'10px', border:'1px solid '+C.border, borderRadius:10, fontSize:13, color:C.navy, outline:'none', background:'white' }}>
+          <select value={imei} onChange={e=>setImei(e.target.value)} style={{ padding:'10px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none', background:'white' }}>
             <option value="">Select vehicle...</option>
             {vehicles.map(v=><option key={v.imei} value={v.imei}>{v.name}</option>)}
           </select>
-          <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ padding:'10px', border:'1px solid '+C.border, borderRadius:10, fontSize:13, color:C.navy, outline:'none' }}/>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ padding:'10px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none' }}/>
         </div>
         <button onClick={load} style={{ width:'100%', padding:'11px', background:C.blue, color:'white', border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer' }}>Load Route</button>
       </div>
@@ -1746,7 +1746,7 @@ function FuelScreen({ onBack }) {
             <div style={{ marginBottom:0 }}>
               <label style={{ display:'block', color:C.muted, fontSize:12, fontWeight:600, marginBottom:6 }}>Total Cost ($) — auto-calc</label>
               <input value={form.total_cost} onChange={e=>fld('total_cost',e.target.value)} placeholder="auto" type="number"
-                style={{ width:'100%', padding:'13px 14px', border:`1px solid ${C.green}`, borderRadius:10, fontSize:15, fontWeight:700, color:C.green, outline:'none', boxSizing:'border-box', background:'white' }}/>
+                style={{ width:'100%', padding:'13px 14px', border:`1px solid ${C.green}`, borderRadius:10, fontSize:16, fontWeight:700, color:C.green, outline:'none', boxSizing:'border-box', background:'white' }}/>
             </div>
           </div>
 

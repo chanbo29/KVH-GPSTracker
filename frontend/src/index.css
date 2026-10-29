@@ -5,6 +5,16 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 input, select, button { font-family: inherit; }
+
+/* Stop mobile browsers auto-zooming the page in when a form field is
+   tapped. iOS Safari (and some Android browsers) zoom in on focus
+   whenever the focused input/select/textarea has a font-size under
+   16px — forcing 16px here removes the trigger app-wide. */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
 .gm-style .gm-style-iw-c { border-radius: 12px !important; padding: 0 !important; }
 .gm-style .gm-style-iw-d { overflow: hidden !important; }
 
