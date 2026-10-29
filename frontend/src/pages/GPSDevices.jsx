@@ -9,7 +9,7 @@ const B='#1B6BB5', G='#059669', R='#DC2626', A='#D97706'
 const PROTOCOLS = ['GT06','TK103','H02','GT02','Other']
 const BLANK = { imei:'', model:'GPS', sim_number:'', vehicle:'', protocol:'GT06', gps_status:'offline' }
 const QUICK_BLANK = { imei:'', sim_number:'', protocol:'GT06' }
-const SMS_DEFAULT = { apn:'metfone', ip:'208.122.29.50', port:'5023', interval:'10' }
+const SMS_DEFAULT = { apn:'metfone', ip:'208.122.29.50', port:'443', interval:'10' }
 
 export default function GPSDevices() {
   const { data:devices, setData:setDevices, loading } = useApi(api.devices.list)
