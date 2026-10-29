@@ -695,7 +695,7 @@ export default function LiveTracking() {
 
                 {/* Navy header */}
                 <div style={{ background:T.navy, padding:'14px 16px 12px' }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
 
                     {/* Avatar */}
                     <div style={{ width:46, height:46, borderRadius:13, background:`${s.color}22`, border:`1.5px solid ${s.color}44`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:16, fontWeight:800, color:s.color, position:'relative' }}>
@@ -711,11 +711,13 @@ export default function LiveTracking() {
                       <div style={{ color:'white', fontWeight:800, fontSize:16, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                         {hasDriver ? selected.owner : '— No driver assigned —'}
                       </div>
-                      {/* Car name + plate — secondary */}
-                      <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4 }}>
-                        <Car size={11} color="rgba(255,255,255,.4)"/>
-                        <span style={{ color:'rgba(255,255,255,.5)', fontSize:12 }}>{selected.name} · {selected.plate}</span>
-                        <span style={{ background:`${s.color}22`, color:s.color, fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20 }}>{s.label}{selected.status !== 'moving' && sinceLabel(selected.status_since) ? ' · ' + sinceLabel(selected.status_since) : ''}</span>
+                      {/* Car name + plate — secondary. minWidth:0 + ellipsis on the
+                          name/plate text (instead of letting it wrap) is what keeps this
+                          row on one line even when the plate + status pill are long. */}
+                      <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4, minWidth:0 }}>
+                        <Car size={11} color="rgba(255,255,255,.4)" style={{ flexShrink:0 }}/>
+                        <span style={{ color:'rgba(255,255,255,.5)', fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0 }}>{selected.name} · {selected.plate}</span>
+                        <span style={{ background:`${s.color}22`, color:s.color, fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap', flexShrink:0 }}>{s.label}{selected.status !== 'moving' && sinceLabel(selected.status_since) ? ' · ' + sinceLabel(selected.status_since) : ''}</span>
                       </div>
                     </div>
 
