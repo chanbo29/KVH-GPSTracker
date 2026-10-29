@@ -103,7 +103,8 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
           padding: collapsed ? '7px 0' : '7px 10px 7px 7px', borderRadius:9, border:'none',
           cursor:'pointer', marginBottom:2, textAlign:'left',
           background: bg,
-          transition: `background .15s ${EASE}`,
+          transform: hover && !collapsed ? 'translateX(3px)' : 'translateX(0)',
+          transition: `background .15s ${EASE}, transform .18s ${EASE}`,
           position:'relative',
         }}
       >
@@ -113,8 +114,8 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
           width:28, height:28, borderRadius:7, flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'center',
           background: isActive ? ACCENT : 'transparent',
-          boxShadow: isActive ? '0 2px 8px rgba(242,169,59,.35)' : 'none',
-          transition: `background .18s ${EASE}, box-shadow .18s ${EASE}`,
+          animation: isActive ? 'kvhBadgeGlow 2.4s ease-in-out infinite' : 'none',
+          transition: `background .18s ${EASE}`,
         }}>
           <Icon size={15} color={isActive ? ACCENT_DARK : (hover ? '#B8C3D6' : '#7E8CA3')} style={{ transition: `color .15s ${EASE}` }} />
         </div>
@@ -137,7 +138,7 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
 
   return (
     <div style={{ position:'relative', width: collapsed ? 72 : 240, minWidth: collapsed ? 72 : 240, flexShrink:0, zIndex:10, height:'100vh', transition: `width .24s ${EASE}, min-width .24s ${EASE}` }}>
-      <style>{`@keyframes kvhLivePulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 6px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}}`}</style>
+      <style>{`@keyframes kvhLivePulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.5)}70%{box-shadow:0 0 0 6px rgba(52,211,153,0)}100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}} @keyframes kvhBadgeGlow{0%,100%{box-shadow:0 2px 8px rgba(242,169,59,.35)}50%{box-shadow:0 3px 18px rgba(242,169,59,.65)}}`}</style>
       <div style={{
         width:'100%', height:'100%',
         background:`linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0) 140px), ${C.sidebar}`,

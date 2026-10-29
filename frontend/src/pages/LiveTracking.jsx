@@ -239,6 +239,63 @@ export default function LiveTracking() {
   const markers    = useRef({})
   const pulses     = useRef({})
   const infoWins   = useRef({})   // one VehicleLabel overlay per vehicle, always visible
+  const vehiclesRef = useRef([])  // latest fleet data, read from map event listeners/timers
+  useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
+
+  // When two or more vehicles are close enough together on screen that their
+  // always-on labels would overlap (exactly what happened with two parked
+  // motorbikes a block apart), hide those individual labels and show one
+  // combined "N vehicles here" chip instead — tapping it zooms in, which
+  // naturally spreads the markers apart until each gets its own label back.
+  const [clusters, setClusters] = useState([])
+  const declutterLabels = useCallback(() => {
+    const entries = Object.entries(infoWins.current)
+    if (entries.length === 0) { setClusters([]); return }
+    const proj = entries[0][1]?.getProjection?.()
+    if (!proj) return
+
+    const pts = entries.map(([imei, label]) => {
+      const v = vehiclesRef.current.find(v => v.imei === imei)
+      if (!v || !v.lat || parseFloat(v.lat) === 0) return null
+      const p = proj.fromLatLngToDivPixel(new window.google.maps.LatLng(parseFloat(v.lat), parseFloat(v.lng)))
+      return p ? { imei, v, x: p.x, y: p.y } : null
+    }).filter(Boolean)
+
+    // Union-find: group any vehicles whose pins are within CLUSTER_PX of
+    // each other on screen (chains through intermediate members too).
+    const CLUSTER_PX = 80
+    const parent = {}
+    pts.forEach(p => { parent[p.imei] = p.imei })
+    const find  = id => parent[id] === id ? id : (parent[id] = find(parent[id]))
+    const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb }
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        if (Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y) < CLUSTER_PX) union(pts[i].imei, pts[j].imei)
+      }
+    }
+    const groups = {}
+    pts.forEach(p => { const r = find(p.imei); (groups[r] = groups[r] || []).push(p) })
+
+    const next = []
+    Object.values(groups).forEach(members => {
+      const clustered = members.length > 1
+      members.forEach(m => {
+        const card = infoWins.current[m.imei]?.card
+        if (card) card.style.display = clustered ? 'none' : ''
+      })
+      if (clustered) {
+        next.push({
+          key: members.map(m => m.imei).sort().join('-'),
+          x: members.reduce((s, m) => s + m.x, 0) / members.length,
+          y: Math.min(...members.map(m => m.y)),
+          lat: members.reduce((s, m) => s + parseFloat(m.v.lat), 0) / members.length,
+          lng: members.reduce((s, m) => s + parseFloat(m.v.lng), 0) / members.length,
+          vehicles: members.map(m => m.v),
+        })
+      }
+    })
+    setClusters(next)
+  }, [])
   // Remember the user's last map-type choice (satellite vs roadmap) per
   // browser, and default to satellite on first visit. Wrapped in try/catch
   // since localStorage can throw or be unavailable in some contexts.
@@ -316,7 +373,16 @@ export default function LiveTracking() {
     loadGoogleMaps().then(()=>{ if(!cancelled) initMap() }).catch(err=>console.error(err))
     return ()=>{ cancelled = true }
   }, [initMap])
-  useEffect(()=>{ if(mapReady) syncMarkers(vehicles) },   [mapReady,vehicles])
+  useEffect(()=>{
+    if (!gmap.current) return
+    const id = gmap.current.addListener('idle', () => setTimeout(declutterLabels, 30))
+    return () => id.remove()
+  }, [mapReady, declutterLabels])
+  useEffect(()=>{
+    if (!mapReady) return
+    syncMarkers(vehicles)
+    setTimeout(declutterLabels, 60)
+  }, [mapReady, vehicles, declutterLabels])
   // Map type: satellite/hybrid toggle button
   useEffect(()=>{
     if(!gmap.current) return
@@ -329,9 +395,9 @@ export default function LiveTracking() {
   },[vehicles])
   useEffect(()=>{
     fetch()
-    const id=setInterval(async()=>{const d=await fetch();syncMarkers(d)},5000)
+    const id=setInterval(async()=>{const d=await fetch();syncMarkers(d);setTimeout(declutterLabels,60)},5000)
     return()=>clearInterval(id)
-  },[fetch,syncMarkers])
+  },[fetch,syncMarkers,declutterLabels])
 
   const focus = v => {
     setSelected(v)
@@ -581,6 +647,29 @@ export default function LiveTracking() {
       ════════════════════════════════════════════════════ */}
       <div style={{ flex:1, position:'relative', overflow:'hidden' }}>
         <div ref={mapRef} style={{ position:'absolute', inset:0 }}/>
+
+        {/* ── Cluster chips — stand in for two+ vehicle labels that would ── */}
+        {/* ── otherwise overlap on screen; tap to zoom in and spread them out ── */}
+        {clusters.map(c => (
+          <div key={c.key}
+            onClick={() => {
+              gmap.current?.panTo({ lat: c.lat, lng: c.lng })
+              gmap.current?.setZoom(Math.min((gmap.current.getZoom() || 13) + 3, 20))
+            }}
+            style={{ position:'absolute', left:c.x, top:c.y, transform:'translate(-50%, calc(-100% - 15px))', zIndex:46, cursor:'pointer', animation:'kvhBubbleIn .38s cubic-bezier(.34,1.56,.64,1)' }}>
+            <div style={{ position:'relative', display:'flex', alignItems:'center', gap:9, background:T.navy, color:'white', borderRadius:30, padding:'7px 16px 7px 7px', boxShadow:'0 10px 28px rgba(15,23,42,.3), 0 2px 6px rgba(15,23,42,.12)', border:'1px solid rgba(255,255,255,.12)' }}>
+              <div style={{ display:'flex' }}>
+                {c.vehicles.slice(0,4).map((v,i) => (
+                  <div key={v.imei} style={{ width:24, height:24, borderRadius:'50%', background:st(v.status).color, border:'2px solid '+T.navy, marginLeft: i>0?-9:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:800, color:'white', flexShrink:0 }}>
+                    {((v.owner && v.owner!=='Unassigned' ? v.owner : v.name || '?')[0] || '?').toUpperCase()}
+                  </div>
+                ))}
+              </div>
+              <span style={{ fontSize:12, fontWeight:700, whiteSpace:'nowrap' }}>{c.vehicles.length} vehicles here &middot; tap to zoom</span>
+              <div style={{ position:'absolute', left:'50%', bottom:-5, width:10, height:10, marginLeft:-5, background:T.navy, transform:'rotate(45deg)', borderRight:'1px solid rgba(255,255,255,.12)', borderBottom:'1px solid rgba(255,255,255,.12)' }}/>
+            </div>
+          </div>
+        ))}
 
         {/* Sidebar toggle */}
         <button onClick={()=>setOpen(p=>!p)}
