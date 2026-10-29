@@ -92,6 +92,10 @@ class VehicleViewSet(viewsets.ModelViewSet):
             start = CAMBODIA_TZ.localize(datetime.datetime.combine(day, datetime.time.min))
             end   = start + datetime.timedelta(days=1)
             logs  = logs.filter(timestamp__gte=start, timestamp__lt=end)
+        # GPSLog's default ordering (Meta.ordering = ['-timestamp']) is
+        # newest-first, which is right for live/alert views but wrong for
+        # History playback, which needs oldest-first (morning -> night).
+        logs = logs.order_by('timestamp')
         return Response(GPSLogSerializer(logs[:500], many=True).data)
 
     @action(detail=False, methods=['post'], url_path='receive-gps')
