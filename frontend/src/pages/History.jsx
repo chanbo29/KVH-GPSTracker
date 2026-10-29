@@ -384,6 +384,26 @@ export default function History() {
                  }),
           event: i === 0 ? 'Start' : i === arr.length - 1 ? 'Stop' : '',
         }))
+
+        // Real trip distance: for each gap between two fixes, distance =
+        // average speed x time elapsed (trapezoidal). This rides straight
+        // through ordinary GPS position jitter — a parked device can
+        // "wander" 10-100m between fixes while speed stays 0, so measuring
+        // raw point-to-point distance would fake several extra km over a
+        // day of just sitting still. A gap over 10 minutes (device briefly
+        // offline / reconnecting) is capped so a silent stretch never gets
+        // counted as high-speed travel.
+        const MAX_GAP_HOURS = 10 / 60
+        let cum = 0
+        data.forEach((pt, i) => {
+          if (i > 0) {
+            const dtHours  = Math.min(Math.max((pt.ts - data[i - 1].ts) / 3600000, 0), MAX_GAP_HOURS)
+            const avgSpeed = (pt.speed + data[i - 1].speed) / 2
+            cum += avgSpeed * dtHours
+          }
+          pt.cumKm = cum
+        })
+
         setRoute(data)
         setRouteIdx(0)
         setPlaying(false)
@@ -473,7 +493,7 @@ export default function History() {
 
   // ── Stats ────────────────────────────────────────────────────
   const maxSpeed  = route.length ? Math.max(...route.map(r => r.speed)) : 0
-  const tripDist  = route.length > 1 ? (route.length * 0.25).toFixed(1) : 0
+  const tripDist  = route.length ? (route[route.length - 1].cumKm || 0).toFixed(2) : '0.00'
   const startTime = route[0]?.time || '--'
   const endTime   = route[route.length-1]?.time || '--'
 
@@ -610,7 +630,7 @@ export default function History() {
                       </span>
                     )}
                     <div style={{ color:C.faint, fontSize:10, marginTop:2 }}>
-                      {pt.lat.toFixed(4)}, {pt.lng.toFixed(4)}
+                      {pt.lat.toFixed(4)}, {pt.lng.toFixed(4)} &middot; {pt.cumKm.toFixed(2)} km
                     </div>
                   </div>
                 </div>
