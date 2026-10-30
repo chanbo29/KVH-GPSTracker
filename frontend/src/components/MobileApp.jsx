@@ -395,10 +395,19 @@ function HomeScreen({ user, onNav }) {
       <div style={{ padding:'16px 14px' }}>
         <div style={{ color:C.navy, fontWeight:700, fontSize:14, marginBottom:10 }}>{t('mobile.quickAccess')}</div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:20 }}>
-          {[[t('mobile.map'),Map,'tracking',C.blue,C.blueL],[t('nav.vehicles'),Car,'vehicles',C.green,C.greenL],[t('nav.alerts'),Bell,'alerts',C.red,C.redL],[t('mobile.more'),MoreHorizontal,'more',C.amber,C.amberL]].map(([l,Icon,nav,col,bg])=>(
+          {[
+            [t('nav.vehicles'),    Car,       'vehicles',    C.blue,   C.blueL],
+            [t('nav.drivers'),     Users,     'drivers',     C.green,  C.greenL],
+            [t('nav.geofences'),   Shield,    'geofences',   '#7C3AED','#F5F3FF'],
+            [t('nav.maintenance'), Wrench,    'maintenance', C.amber,  C.amberL],
+            [t('nav.users'),       User,      'users',       '#334155','#F8FAFC'],
+            [t('nav.devices'),     Cpu,       'devices',     '#334155','#F8FAFC'],
+            [t('nav.fuel'),        Droplets,  'fuel',        '#0891B2','#ECFEFF'],
+            [t('nav.settings'),    Settings,  'settings',    '#334155','#F8FAFC'],
+          ].map(([l,Icon,nav,col,bg])=>(
             <button key={l} onClick={()=>onNav(nav)} style={{ background:C.card, border:'1px solid '+C.border, borderRadius:14, padding:'12px 6px', display:'flex', flexDirection:'column', alignItems:'center', gap:6, cursor:'pointer' }}>
               <div style={{ width:44, height:44, borderRadius:13, background:bg, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon size={20} color={col}/></div>
-              <span style={{ color:C.navy, fontSize:11, fontWeight:600 }}>{l}</span>
+              <span style={{ color:C.navy, fontSize:10.5, fontWeight:600, textAlign:'center', lineHeight:1.15 }}>{l}</span>
             </button>
           ))}
         </div>
