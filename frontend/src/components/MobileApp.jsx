@@ -1249,6 +1249,23 @@ const MOCK = { '865784056472668': { '2026-09-10': [
   {lat:11.5660,lng:104.9400,time:'07:50',speed:70},{lat:11.5700,lng:104.9440,time:'08:00',speed:0},
 ]}}
 
+// Great-circle bearing from a to b, in degrees (0-360) — used to rotate the
+// playback marker to face the direction of travel.
+function bearing(a, b) {
+  const toRad = d => d * Math.PI / 180
+  const toDeg = r => r * 180 / Math.PI
+  const dLng = toRad(b.lng - a.lng)
+  const y = Math.sin(dLng) * Math.cos(toRad(b.lat))
+  const x = Math.cos(toRad(a.lat)) * Math.sin(toRad(b.lat)) - Math.sin(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.cos(dLng)
+  return (toDeg(Math.atan2(y, x)) + 360) % 360
+}
+// Shortest-path angle interpolation, so a turn from 350° to 10° sweeps the
+// short way through 360°/0° instead of spinning almost all the way round.
+function lerpAngle(a, b, t) {
+  const diff = ((b - a + 540) % 360) - 180
+  return (a + diff * t + 360) % 360
+}
+
 function VehiclePickerSheet({ vehicles, value, onChange }) {
   const [open,   setOpen]   = useState(false)
   const [search, setSearch] = useState('')
@@ -1307,6 +1324,7 @@ function HistoryScreen({ onBack }) {
   const [ready,   setReady]   = useState(false)
   const [loading, setLoading] = useState(false)
   const mapEl=useRef(null); const gmap=useRef(null); const marker=useRef(null); const poly=useRef(null); const endpoints=useRef([]); const timer=useRef(null)
+  const courseRef=useRef(0); const glideGenRef=useRef(0)   // playback marker facing angle + glide-cancel generation
   const [sat,setSat]=useState(()=>{try{return localStorage.getItem('kvh_map_sat')!=='0'}catch{return true}})
   const todayStr = () => new Date().toISOString().slice(0,10)
   const addDays = (d,n) => { const x=new Date(d+'T00:00:00'); x.setDate(x.getDate()+n); return x.toISOString().slice(0,10) }
@@ -1318,12 +1336,12 @@ function HistoryScreen({ onBack }) {
       anchor:new window.google.maps.Point(12,12),
     }
   }
-  const playIcon=()=>{
-    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))"><path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${C.blue}" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>`
+  const vehicleIcon=(course=0,color=C.blue)=>{
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))"><g transform="rotate(${course} 12 12)"><path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/></g></svg>`
     return{
       url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg),
-      scaledSize:new window.google.maps.Size(22,22),
-      anchor:new window.google.maps.Point(11,11),
+      scaledSize:new window.google.maps.Size(26,26),
+      anchor:new window.google.maps.Point(13,13),
     }
   }
   const initMap=()=>{
@@ -1354,11 +1372,41 @@ function HistoryScreen({ onBack }) {
     const a=new window.google.maps.Marker({position:latlngs[0],icon:dotIcon('A',C.green),map:gmap.current})
     const b=new window.google.maps.Marker({position:latlngs[latlngs.length-1],icon:dotIcon('B',C.red),map:gmap.current})
     endpoints.current=[a,b]
-    marker.current=new window.google.maps.Marker({position:latlngs[0],icon:playIcon(),map:gmap.current})
+    const course0=pts.length>1?bearing(pts[0],pts[1]):0
+    courseRef.current=course0
+    marker.current=new window.google.maps.Marker({position:latlngs[0],icon:vehicleIcon(course0,C.blue),map:gmap.current})
     const bounds=new window.google.maps.LatLngBounds()
     latlngs.forEach(p=>bounds.extend(p))
     gmap.current.fitBounds(bounds,{top:30,left:30,right:30,bottom:150})
     setIdx(0)
+  }
+  // Smoothly glide the playback marker to `to` over `ms` ms, rotating it to
+  // face `course` along the way (shortest-path turn), instead of snapping
+  // straight to the next point — same technique as the desktop History page.
+  const glideMarker=(to,ms,course,color)=>{
+    const m=marker.current
+    if(!m||!window.google?.maps)return
+    const gen=++glideGenRef.current
+    const cur=m.getPosition()
+    const from={lat:cur.lat(),lng:cur.lng()}
+    const fromCourse=courseRef.current
+    const toCourse=course!=null?course:fromCourse
+    const t0=performance.now()
+    const ease=t=>t<.5?2*t*t:-1+(4-2*t)*t
+    const step=now=>{
+      if(gen!==glideGenRef.current)return
+      const p=Math.min((now-t0)/ms,1)
+      const e=ease(p)
+      m.setPosition({lat:from.lat+(to.lat-from.lat)*e, lng:from.lng+(to.lng-from.lng)*e})
+      if(course!=null){
+        const ang=lerpAngle(fromCourse,toCourse,e)
+        m.setIcon(vehicleIcon(ang,color))
+        courseRef.current=ang
+      }
+      if(p<1)requestAnimationFrame(step)
+      else courseRef.current=toCourse
+    }
+    requestAnimationFrame(step)
   }
   // Real trip distance (speed x time between fixes, not raw point jitter —
   // see the same technique on the desktop History page) so this screen can
@@ -1405,16 +1453,33 @@ function HistoryScreen({ onBack }) {
     const advance=(prev)=>{
       const n=prev+1
       if(n>=route.length){ setPlaying(false); return }
-      if(marker.current) marker.current.setPosition({lat:route[n].lat,lng:route[n].lng})
+      const dur=stepDur(prev,n)
+      if(marker.current && window.google?.maps){
+        const course=bearing(route[prev],route[n])
+        glideMarker({lat:route[n].lat,lng:route[n].lng}, Math.min(dur*.92,dur), course, route[n].speed>60?C.red:C.blue)
+      }
       setIdx(n)
-      if(!cancelled) timer.current=setTimeout(()=>advance(n), stepDur(n, Math.min(n+1,route.length-1)))
+      if(!cancelled) timer.current=setTimeout(()=>advance(n), dur)
     }
     timer.current=setTimeout(()=>advance(idx), stepDur(idx, Math.min(idx+1,route.length-1)))
     return()=>{ cancelled=true; clearTimeout(timer.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[playing,speed,route])
 
-  const go=n=>{ const i=Math.max(0,Math.min(route.length-1,n)); setIdx(i); if(marker.current&&route[i])marker.current.setPosition({lat:route[i].lat,lng:route[i].lng}) }
+  const go=n=>{
+    const i=Math.max(0,Math.min(route.length-1,n))
+    setIdx(i)
+    if(marker.current&&route[i]){
+      glideGenRef.current++   // cancel any in-flight glide — this is an instant seek
+      marker.current.setPosition({lat:route[i].lat,lng:route[i].lng})
+      const ref=route[i+1]||route[i-1]
+      if(ref){
+        const course=i<route.length-1?bearing(route[i],route[i+1]):bearing(route[i-1],route[i])
+        courseRef.current=course
+        marker.current.setIcon(vehicleIcon(course, route[i].speed>60?C.red:C.blue))
+      }
+    }
+  }
   const cur=route[idx]; const pct=route.length>1?(idx/(route.length-1)*100):0
   const totalKm = route.length ? (route[route.length-1].cumKm||0).toFixed(1) : '0.0'
   const maxSpeed = route.length ? Math.max(...route.map(r=>r.speed)) : 0

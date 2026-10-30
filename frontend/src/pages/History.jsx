@@ -58,6 +58,13 @@ function bearing(a, b) {
   return (toDeg(Math.atan2(y, x)) + 360) % 360
 }
 
+// Shortest-path angle interpolation (so a turn from 350° to 10° sweeps the
+// short way through 360°/0° instead of spinning almost all the way round).
+function lerpAngle(a, b, t) {
+  const diff = ((b - a + 540) % 360) - 180
+  return (a + diff * t + 360) % 360
+}
+
 // ── Arrow-shaped vehicle icon for the playback marker, rotated to face the
 // direction of travel — same visual language as the Live Tracking markers.
 function vehicleIcon(course = 0, color = '#1B6BB5') {
@@ -231,6 +238,7 @@ export default function History() {
   const pulseRef    = useRef(null)      // soft ring behind the marker while playing
   const timerRef    = useRef(null)
   const glideGenRef = useRef(0)         // cancels stale glide animations on seek
+  const courseRef   = useRef(0)         // marker's current facing angle, for smooth turn interpolation
   const rowRefs     = useRef([])        // route-log rows, so playback can auto-scroll to the active one
 
   const cur = route[routeIdx]
@@ -268,21 +276,30 @@ export default function History() {
   // ── Smoothly glide the playback marker from its current spot to `to`,
   // over `ms` milliseconds. A generation counter cancels any in-flight
   // glide if the user seeks elsewhere before it finishes.
-  const glideMarker = (to, ms) => {
+  const glideMarker = (to, ms, course, color) => {
     const marker = markerRef.current
     if (!marker || !window.google?.maps) return
     const gen  = ++glideGenRef.current
     const cur  = marker.getPosition()
     const from = { lat: cur.lat(), lng: cur.lng() }
+    const fromCourse = courseRef.current
+    const toCourse   = course != null ? course : fromCourse
     const t0   = performance.now()
     const ease = t => t < .5 ? 2*t*t : -1+(4-2*t)*t
     const step = now => {
       if (gen !== glideGenRef.current) return   // superseded by a newer seek
       const p = Math.min((now - t0) / ms, 1)
-      const pos = { lat: from.lat+(to.lat-from.lat)*ease(p), lng: from.lng+(to.lng-from.lng)*ease(p) }
+      const e = ease(p)
+      const pos = { lat: from.lat+(to.lat-from.lat)*e, lng: from.lng+(to.lng-from.lng)*e }
       marker.setPosition(pos)
       if (pulseRef.current) pulseRef.current.setCenter(pos)
+      if (course != null) {
+        const ang = lerpAngle(fromCourse, toCourse, e)
+        marker.setIcon(vehicleIcon(ang, color))
+        courseRef.current = ang
+      }
       if (p < 1) requestAnimationFrame(step)
+      else courseRef.current = toCourse
     }
     requestAnimationFrame(step)
   }
@@ -358,6 +375,7 @@ export default function History() {
     pulseRef.current = pulse
 
     const course0 = pts.length > 1 ? bearing(pts[0], pts[1]) : 0
+    courseRef.current = course0
     markerRef.current = new window.google.maps.Marker({
       position: pts[0], map: gmapRef.current,
       icon: vehicleIcon(course0, C.accent),
@@ -456,8 +474,7 @@ export default function History() {
       const dur = stepDuration(prev, n)
       if (window.google?.maps) {
         const course = bearing(route[prev], route[n])
-        markerRef.current?.setIcon(vehicleIcon(course, route[n].speed > 60 ? '#F59E0B' : C.accent))
-        glideMarker(route[n], Math.min(dur * .92, dur))
+        glideMarker(route[n], Math.min(dur * .92, dur), course, route[n].speed > 60 ? '#F59E0B' : C.accent)
         updateTrail(route, n)
         gmapRef.current?.panTo(route[n])
       }
@@ -485,6 +502,7 @@ export default function History() {
       const ref = route[idx+1] || route[idx-1]
       if (ref) {
         const course = idx < route.length-1 ? bearing(route[idx], route[idx+1]) : bearing(route[idx-1], route[idx])
+        courseRef.current = course
         markerRef.current.setIcon(vehicleIcon(course, route[idx].speed > 60 ? '#F59E0B' : C.accent))
       }
       updateTrail(route, idx)

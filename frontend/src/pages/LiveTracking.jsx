@@ -88,34 +88,26 @@ function mkIcon(status, course = 0) {
 // chrome and oversized default close button can't be restyled away.
 function mkInfoHtml(v) {
   const s = st(v.status)
-  const hasDriver = v.owner && v.owner !== 'Unassigned'
-  const hasFix = v.lat && parseFloat(v.lat) !== 0
-  const coords = hasFix
-    ? `${Number(v.lat).toFixed(5)}, ${Number(v.lng).toFixed(5)}`
-    : 'No GPS signal'
-  const coordColor = hasFix ? '#1B6BB5' : '#D97706'
-  // Only stopped/offline vehicles get a duration — a moving vehicle's
-  // "since" timer isn't meaningful here.
-  const since = v.status !== 'moving' ? sinceLabel(v.status_since) : ''
-  const vehicleLine = `${v.name || ''}${v.plate ? ' · ' + v.plate : ''}`
-  // Two rows instead of three (name+status, then plate+coords together) —
-  // keeps each card compact so a stacked pair takes a lot less vertical
-  // space. Full text is also in `title` so nothing is lost if it truncates.
+  const title = (v.owner && v.owner !== 'Unassigned') ? v.owner : (v.name || 'Vehicle')
+  // Only stopped/offline vehicles get a duration; a moving vehicle shows its
+  // live speed instead — whichever is the one number that matters right now.
+  const info = v.status === 'moving'
+    ? `${Math.round(v.speed || 0)} km/h`
+    : sinceLabel(v.status_since)
+  // Small, two-line card: name + status pill, then plate + the one live
+  // number (speed or stopped/offline duration) — no coordinates, no second
+  // "vehicle name" repeat, so a stacked pair stays compact.
   return `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px">
-        <span style="font-weight:800;font-size:12.5px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${hasDriver ? v.owner : ''}">${hasDriver ? v.owner : '— No driver —'}</span>
-        <span style="display:flex;align-items:center;gap:4px;background:${s.bg};padding:3px 7px;border-radius:20px;flex-shrink:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
+        <span style="font-weight:800;font-size:12px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${title}">${title}</span>
+        <span style="display:flex;align-items:center;gap:4px;background:${s.bg};padding:2px 6px;border-radius:20px;flex-shrink:0">
           <span class="${v.status==='moving'?'kvh-dot-live':''}" style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
-          <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>${since ? `<span style="font-size:8px;font-weight:600;color:${s.color};opacity:.78;margin-left:3px">· ${since}</span>` : ''}
+          <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>
         </span>
       </div>
-
-      <div style="display:flex;align-items:center;gap:5px" title="${vehicleLine} · ${coords}">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${coordColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
-          <path d="M12 22s7-7.5 7-12.5A7 7 0 0 0 5 9.5C5 14.5 12 22 12 22z"/>
-          <circle cx="12" cy="9.5" r="2.3"/>
-        </svg>
-        <span style="font-size:10px;color:${coordColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${vehicleLine} <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;opacity:.85">· ${coords}</span></span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px" title="${v.plate || ''} · ${info}">
+        <span style="font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748B;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.plate || ''}</span>
+        <span style="font-size:10.5px;font-weight:700;color:${s.color};flex-shrink:0">${info}</span>
       </div>
   `
 }
@@ -334,7 +326,7 @@ export default function LiveTracking() {
 
     // Roughly one bubble's height + a small gap — enough vertical room
     // that a stacked label clears the one below it.
-    const LIFT_STEP = 76
+    const LIFT_STEP = 58
     Object.values(groups).forEach(members => {
       // Stable order (by imei) so stacking order doesn't flicker between refreshes
       members.sort((a, b) => a.imei.localeCompare(b.imei))
@@ -567,10 +559,10 @@ export default function LiveTracking() {
         .kvh-bubble {
           position:relative;
           font-family:'Inter',system-ui,-apple-system,sans-serif;
-          min-width:170px;
+          min-width:128px;
           background:#fff;
-          border-radius:12px;
-          padding:8px 11px 8px;
+          border-radius:10px;
+          padding:7px 9px 6px;
           border:1px solid rgba(226,232,240,.9);
           box-shadow:0 10px 28px rgba(15,23,42,.16), 0 2px 6px rgba(15,23,42,.07);
           animation:kvhBubbleIn .38s cubic-bezier(.34,1.56,.64,1);
