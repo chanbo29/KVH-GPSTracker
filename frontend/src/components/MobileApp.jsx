@@ -313,7 +313,7 @@ const GhostBtn = ({ label, onClick }) => (
 const TABS = [
   { id:'home',     labelKey:'mobile.home',     Icon:Home           },
   { id:'tracking', labelKey:'mobile.tracking', Icon:Map            },
-  { id:'history',  labelKey:'nav.history',     Icon:Activity       },
+  { id:'history',  labelKey:'nav.historyTab',  Icon:Activity       },
   { id:'alerts',   labelKey:'nav.alerts',      Icon:Bell           },
   { id:'more',     labelKey:'mobile.more',     Icon:MoreHorizontal },
 ]
@@ -338,7 +338,7 @@ function Nav({ active, onNav, unread }) {
               <div style={{ width:40, height:26, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:13, background:on?C.blueL:'transparent' }}>
                 <Icon size={19} color={on?C.blue:C.faint} strokeWidth={on?2.5:1.8}/>
               </div>
-              <span style={{ fontSize:10, fontWeight:on?700:400, color:on?C.blue:C.faint }}>{label}</span>
+              <span style={{ fontSize:10, fontWeight:on?700:400, color:on?C.blue:C.faint, whiteSpace:'nowrap' }}>{label}</span>
             </button>
           )
         })}
@@ -1551,12 +1551,12 @@ function HistoryScreen({ onBack }) {
           </div>
         )}
         {cur&&route.length>0 && (
-          <div style={{ position:'absolute', top:12, left:12, right:66, background:'white', borderRadius:12, padding:'10px 14px', boxShadow:'0 4px 16px rgba(0,0,0,.12)', border:'1px solid '+C.border }}>
-            <div style={{ color:C.faint, fontSize:10, marginBottom:4 }}>{selVehicle?.name||''} &middot; Point {idx+1}/{route.length}</div>
-            <div style={{ display:'flex', gap:16 }}>
-              <div><div style={{ color:C.faint, fontSize:10 }}>Time</div><div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{cur.time}</div></div>
-              <div><div style={{ color:C.faint, fontSize:10 }}>Speed</div><div style={{ color:cur.speed>60?C.red:cur.speed===0?C.muted:C.green, fontWeight:700, fontSize:14 }}>{cur.speed} km/h</div></div>
+          <div style={{ position:'absolute', top:12, left:12, right:60, background:'white', borderRadius:11, padding:'8px 12px', boxShadow:'0 4px 16px rgba(0,0,0,.12)', border:'1px solid '+C.border, display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:12, fontWeight:700, color:C.navy }}>
+              {selVehicle?.name||''} <span style={{ color:C.faint, fontWeight:600 }}>&middot; {idx+1}/{route.length}</span>
             </div>
+            <div style={{ fontSize:12, fontWeight:700, color:C.muted, flexShrink:0 }}>{cur.time.slice(0,5)}</div>
+            <div style={{ fontSize:12.5, fontWeight:800, color:cur.speed>60?C.red:cur.speed===0?C.muted:C.green, flexShrink:0 }}>{cur.speed} km/h</div>
           </div>
         )}
       </div>

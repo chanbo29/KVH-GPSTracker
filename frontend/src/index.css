@@ -6,6 +6,18 @@ html, body, #root { height: 100%; width: 100%; overflow: hidden; }
 ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 input, select, button { font-family: inherit; }
 
+/* Reset native button chrome. Without this, iOS Safari applies its own
+   default appearance on top of a buttons inline styles (most visibly a
+   forced pill/circle shape on small solid-colour buttons like play/pause
+   controls), so custom border-radius and sizing don not render as authored. */
+button {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
 /* Stop mobile browsers auto-zooming the page in when a form field is
    tapped. iOS Safari (and some Android browsers) zoom in on focus
    whenever the focused input/select/textarea has a font-size under
