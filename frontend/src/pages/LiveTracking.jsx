@@ -97,35 +97,25 @@ function mkInfoHtml(v) {
   // Only stopped/offline vehicles get a duration — a moving vehicle's
   // "since" timer isn't meaningful here.
   const since = v.status !== 'moving' ? sinceLabel(v.status_since) : ''
-  // Just the inner rows — VehicleLabel wraps this once in a persistent
-  // .kvh-bubble card on creation, and only swaps this inner HTML on later
-  // updates, so the bouncy entrance animation plays once per vehicle
-  // (on first fix) rather than replaying on every 5s refresh.
+  const vehicleLine = `${v.name || ''}${v.plate ? ' · ' + v.plate : ''}`
+  // Two rows instead of three (name+status, then plate+coords together) —
+  // keeps each card compact so a stacked pair takes a lot less vertical
+  // space. Full text is also in `title` so nothing is lost if it truncates.
   return `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px">
-        <span style="font-weight:800;font-size:12.5px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasDriver ? v.owner : '— No driver —'}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:5px">
+        <span style="font-weight:800;font-size:12.5px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${hasDriver ? v.owner : ''}">${hasDriver ? v.owner : '— No driver —'}</span>
         <span style="display:flex;align-items:center;gap:4px;background:${s.bg};padding:3px 7px;border-radius:20px;flex-shrink:0">
           <span class="${v.status==='moving'?'kvh-dot-live':''}" style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
           <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>${since ? `<span style="font-size:8px;font-weight:600;color:${s.color};opacity:.78;margin-left:3px">· ${since}</span>` : ''}
         </span>
       </div>
 
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
-          <path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11"/>
-          <rect x="3" y="11" width="18" height="6" rx="1.5"/>
-          <circle cx="7.5" cy="17.5" r="1.4"/>
-          <circle cx="16.5" cy="17.5" r="1.4"/>
-        </svg>
-        <span style="font-size:10.5px;color:#64748B;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.name || ''}${v.plate ? ' · ' + v.plate : ''}</span>
-      </div>
-
-      <div style="display:flex;align-items:center;gap:6px;padding-top:6px;border-top:1px dashed #E2E8F0">
+      <div style="display:flex;align-items:center;gap:5px" title="${vehicleLine} · ${coords}">
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${coordColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
           <path d="M12 22s7-7.5 7-12.5A7 7 0 0 0 5 9.5C5 14.5 12 22 12 22z"/>
           <circle cx="12" cy="9.5" r="2.3"/>
         </svg>
-        <span style="font-size:10px;color:${coordColor};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;white-space:nowrap">${coords}</span>
+        <span style="font-size:10px;color:${coordColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${vehicleLine} <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;opacity:.85">· ${coords}</span></span>
       </div>
   `
 }
@@ -139,14 +129,15 @@ let VehicleLabelClass = null
 function getVehicleLabelClass() {
   if (VehicleLabelClass) return VehicleLabelClass
   class VehicleLabel extends window.google.maps.OverlayView {
-    constructor(map, position, html) {
+    constructor(map, position, html, color) {
       super()
       this.position = position
-      this.div  = null   // positioned wrapper (no visual style)
-      this.card = null   // persistent .kvh-bubble element — created once,
-                          // so its entrance animation plays only on first
-                          // fix for this vehicle, not on every data refresh
-      this.html = html
+      this.div   = null   // positioned wrapper (no visual style)
+      this.card  = null   // persistent .kvh-bubble element — created once,
+                           // so its entrance animation plays only on first
+                           // fix for this vehicle, not on every data refresh
+      this.html  = html
+      this.color = color || '#1B6BB5'
       this.setMap(map)
     }
     onAdd() {
@@ -164,22 +155,41 @@ function getVehicleLabelClass() {
       card.innerHTML = this.html
       div.appendChild(card)
 
-      // Dashed line from the bubble down to its real pin — only shown once
-      // this label has been lifted above a neighboring one (see setLift).
+      // Solid, color-matched line (with a white halo so it reads against any
+      // map imagery) from the bubble down to its real pin, plus a small dot
+      // right at the pin — only shown once this label has been lifted above
+      // a neighboring one (see setLift). Makes it unmistakable which pin a
+      // stacked label belongs to.
       const connector = document.createElement('div')
       connector.style.position = 'absolute'
-      connector.style.width = '0'
-      connector.style.borderLeft = '2px dashed rgba(15,23,42,.4)'
+      connector.style.width = '3px'
+      connector.style.borderRadius = '2px'
+      connector.style.background = this.color
+      connector.style.boxShadow = '0 0 0 1.5px rgba(255,255,255,.95)'
       connector.style.pointerEvents = 'none'
       connector.style.zIndex = '44'
       connector.style.display = 'none'
 
+      const anchorDot = document.createElement('div')
+      anchorDot.style.position = 'absolute'
+      anchorDot.style.width = '9px'
+      anchorDot.style.height = '9px'
+      anchorDot.style.borderRadius = '50%'
+      anchorDot.style.background = this.color
+      anchorDot.style.border = '2px solid white'
+      anchorDot.style.boxShadow = '0 1px 4px rgba(0,0,0,.35)'
+      anchorDot.style.pointerEvents = 'none'
+      anchorDot.style.zIndex = '44'
+      anchorDot.style.display = 'none'
+
       this.div       = div
       this.card      = card
       this.connector = connector
+      this.anchorDot = anchorDot
       this.lift      = 0
       this.applyTransform()
       this.getPanes().floatPane.appendChild(connector)
+      this.getPanes().floatPane.appendChild(anchorDot)
       this.getPanes().floatPane.appendChild(div)
       this.draw()
     }
@@ -201,10 +211,16 @@ function getVehicleLabelClass() {
         if (this.lift > 6) {
           this.connector.style.display = 'block'
           this.connector.style.top = (pt.y - 15 - this.lift) + 'px'
-          this.connector.style.height = this.lift + 'px'
+          this.connector.style.height = (this.lift + 10) + 'px'
         } else {
           this.connector.style.display = 'none'
         }
+      }
+      if (this.anchorDot) {
+        this.anchorDot.style.left = pt.x + 'px'
+        this.anchorDot.style.top  = pt.y + 'px'
+        this.anchorDot.style.transform = 'translate(-50%, -50%)'
+        this.anchorDot.style.display = this.lift > 6 ? 'block' : 'none'
       }
     }
     // Raises this label `px` above its normal spot (stacking it clear of a
@@ -230,9 +246,11 @@ function getVehicleLabelClass() {
       clearTimeout(this._transTimer)
       if (this.div?.parentNode) this.div.parentNode.removeChild(this.div)
       if (this.connector?.parentNode) this.connector.parentNode.removeChild(this.connector)
+      if (this.anchorDot?.parentNode) this.anchorDot.parentNode.removeChild(this.anchorDot)
       this.div = null
       this.card = null
       this.connector = null
+      this.anchorDot = null
     }
   }
   VehicleLabelClass = VehicleLabel
@@ -316,7 +334,7 @@ export default function LiveTracking() {
 
     // Roughly one bubble's height + a small gap — enough vertical room
     // that a stacked label clears the one below it.
-    const LIFT_STEP = 104
+    const LIFT_STEP = 76
     Object.values(groups).forEach(members => {
       // Stable order (by imei) so stacking order doesn't flicker between refreshes
       members.sort((a, b) => a.imei.localeCompare(b.imei))
@@ -370,7 +388,7 @@ export default function LiveTracking() {
         // Custom floating label, shown automatically as soon as the marker
         // exists — no click needed — gliding smoothly with the pin.
         const LabelCls = getVehicleLabelClass()
-        infoWins.current[v.imei] = new LabelCls(gmap.current, { lat, lng }, mkInfoHtml(v))
+        infoWins.current[v.imei] = new LabelCls(gmap.current, { lat, lng }, mkInfoHtml(v), st(v.status).color)
       }
       // Keep the always-visible label in sync with live position/data
       if (infoWins.current[v.imei]) {
@@ -549,10 +567,10 @@ export default function LiveTracking() {
         .kvh-bubble {
           position:relative;
           font-family:'Inter',system-ui,-apple-system,sans-serif;
-          min-width:156px;
+          min-width:170px;
           background:#fff;
-          border-radius:13px;
-          padding:10px 12px 9px;
+          border-radius:12px;
+          padding:8px 11px 8px;
           border:1px solid rgba(226,232,240,.9);
           box-shadow:0 10px 28px rgba(15,23,42,.16), 0 2px 6px rgba(15,23,42,.07);
           animation:kvhBubbleIn .38s cubic-bezier(.34,1.56,.64,1);
