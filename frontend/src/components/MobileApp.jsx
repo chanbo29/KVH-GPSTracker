@@ -362,37 +362,46 @@ function HomeScreen({ user, onNav }) {
   const unread  = alerts.filter(a=>a.status==='unread').length
   const hour    = now.getHours()
   const greet   = hour<12?'Good morning':hour<17?'Good afternoon':'Good evening'
+  const unreadAlerts = alerts.filter(a=>a.status==='unread').slice(0,2)
   return (
     <Screen>
-      <div style={{ background:'linear-gradient(150deg,'+C.blueD+','+C.blue+')', padding:'max(44px,env(safe-area-inset-top)) 18px 22px', position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', top:-40, right:-40, width:150, height:150, borderRadius:'50%', background:'rgba(255,255,255,.05)' }}/>
-        <img src="/kvh-logo.png" alt="" style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:'55%', maxWidth:220, opacity:.08, filter:'brightness(0) invert(1)', pointerEvents:'none' }}/>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:18, position:'relative' }}>
-          <div>
-            <div style={{ color:'rgba(255,255,255,.65)', fontSize:12, marginBottom:3 }}>{greet} 👋</div>
-            <div style={{ color:'white', fontWeight:800, fontSize:18, textTransform:'uppercase', letterSpacing:.5 }}>{user?.name||'Admin KVH'}</div>
-          </div>
-          <div style={{ textAlign:'right' }}>
-            <div style={{ color:'white', fontWeight:700, fontSize:17 }}>{now.toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</div>
-            <div style={{ color:'rgba(255,255,255,.55)', fontSize:11 }}>{now.toLocaleDateString('en',{weekday:'short',month:'short',day:'numeric'})}</div>
-          </div>
-        </div>
-        <div style={{ background:'rgba(255,255,255,.12)', borderRadius:14, padding:'14px', position:'relative' }}>
-          {loading ? (
-            <div style={{ display:'flex', justifyContent:'center', padding:'8px 0' }}><Spinner size={28} color="white"/></div>
-          ) : (
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-              {[[vehicles.length,t('mobile.fleet'),'white'],[moving,t('mobile.moving'),'#86EFAC'],[unread,t('nav.alerts'),unread>0?'#FCA5A5':'rgba(255,255,255,.55)']].map(([v,l,col])=>(
-                <div key={l} style={{ textAlign:'center' }}>
-                  <div style={{ color:col, fontWeight:800, fontSize:24, lineHeight:1 }}>{v}</div>
-                  <div style={{ color:'rgba(255,255,255,.55)', fontSize:11, marginTop:4 }}>{l}</div>
-                </div>
-              ))}
+      <div style={{ background:C.card, padding:'max(16px,env(safe-area-inset-top)) 18px 0', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:C.navy, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <Car size={17} color={C.blue}/>
             </div>
-          )}
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:10.5, color:C.faint, fontWeight:700, letterSpacing:.4, textTransform:'uppercase' }}>{greet}</div>
+              <div style={{ fontSize:16.5, fontWeight:800, color:C.navy, letterSpacing:-.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.name||'Admin KVH'}</div>
+            </div>
+          </div>
+          <button onClick={()=>onNav('alerts')} style={{ width:40, height:40, borderRadius:12, border:'1px solid '+C.border, background:'white', display:'flex', alignItems:'center', justifyContent:'center', position:'relative', cursor:'pointer', flexShrink:0 }}>
+            <Bell size={18} color={C.navy}/>
+            {unread>0 && <span style={{ position:'absolute', top:7, right:8, width:8, height:8, borderRadius:'50%', background:C.red, border:'1.5px solid white' }}/>}
+          </button>
         </div>
+
+        {loading ? (
+          <div style={{ display:'flex', gap:8, marginBottom:16 }}>{[0,1,2].map(i=><Skel key={i} h={58} r={14} style={{ flex:1 }}/>)}</div>
+        ) : (
+          <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+            <div style={{ flex:1, background:C.greenL, borderRadius:14, padding:'12px 10px', textAlign:'center' }}>
+              <div style={{ fontSize:21, fontWeight:800, color:C.green, lineHeight:1 }}>{moving}</div>
+              <div style={{ fontSize:10, fontWeight:700, color:C.green, marginTop:4, letterSpacing:.3 }}>MOVING</div>
+            </div>
+            <div style={{ flex:1, background:C.amberL, borderRadius:14, padding:'12px 10px', textAlign:'center' }}>
+              <div style={{ fontSize:21, fontWeight:800, color:C.amber, lineHeight:1 }}>{stopped}</div>
+              <div style={{ fontSize:10, fontWeight:700, color:C.amber, marginTop:4, letterSpacing:.3 }}>STOPPED</div>
+            </div>
+            <div style={{ flex:1, background:C.bg, border:'1px solid '+C.border, borderRadius:14, padding:'12px 10px', textAlign:'center' }}>
+              <div style={{ fontSize:21, fontWeight:800, color:C.faint, lineHeight:1 }}>{offline}</div>
+              <div style={{ fontSize:10, fontWeight:700, color:C.faint, marginTop:4, letterSpacing:.3 }}>OFFLINE</div>
+            </div>
+          </div>
+        )}
       </div>
-      <div style={{ padding:'16px 14px' }}>
+      <div style={{ padding:'0 14px 16px' }}>
         <div style={{ color:C.navy, fontWeight:700, fontSize:14, marginBottom:10 }}>{t('mobile.quickAccess')}</div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:20 }}>
           {[
@@ -411,26 +420,25 @@ function HomeScreen({ user, onNav }) {
             </button>
           ))}
         </div>
-        <div style={{ color:C.navy, fontWeight:700, fontSize:14, marginBottom:10 }}>{t('mobile.fleetStatus')}</div>
-        <div style={{ display:'flex', gap:8, marginBottom:20 }}>
-          {loading ? (
-            [0,1,2].map(i=>(
-              <div key={i} style={{ flex:1, background:C.card, borderRadius:14, padding:'12px 10px', border:'1px solid '+C.border }}>
-                <Skel w={32} h={32} r={9} style={{ marginBottom:8 }}/>
-                <Skel h={22} r={6} style={{ marginBottom:6 }}/>
-                <Skel w="60%" h={11} r={6}/>
+        {!loading && unreadAlerts.length > 0 && (
+          <div style={{ background:C.card, border:'1px solid '+C.border, borderRadius:16, overflow:'hidden', marginBottom:20 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'13px 14px 9px' }}>
+              <div style={{ fontSize:13, fontWeight:700, color:C.navy }}>{t('mobile.recentAlerts')}</div>
+              <button onClick={()=>onNav('alerts')} style={{ background:'none', border:'none', cursor:'pointer', fontSize:11.5, fontWeight:700, color:C.blue }}>{t('common.seeAll')}</button>
+            </div>
+            {unreadAlerts.map((a,i)=>(
+              <div key={a.alert_id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 14px', borderTop: i===0 ? '1px solid #F1F5F9' : 'none' }}>
+                <div style={{ width:32, height:32, borderRadius:9, background:a.type==='Overspeed'?C.redL:a.type==='Geofence'?'#F5F3FF':C.blueL, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <AlertTriangle size={15} color={a.type==='Overspeed'?C.red:a.type==='Geofence'?'#7C3AED':C.blue}/>
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12.5, fontWeight:700, color:C.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.type} · {a.vehicle||'Vehicle'}</div>
+                  <div style={{ fontSize:11, color:C.faint, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{a.description||a.location||a.alert_time||''}</div>
+                </div>
               </div>
-            ))
-          ) : (
-            [['Moving',moving,C.green,Activity],['Stopped',stopped,C.amber,Clock],['Offline',offline,C.faint,WifiOff]].map(([l,v,col,Icon])=>(
-              <div key={l} style={{ flex:1, background:C.card, borderRadius:14, padding:'12px 10px', border:'1px solid '+C.border, display:'flex', flexDirection:'column', gap:6 }}>
-                <div style={{ width:32, height:32, borderRadius:9, background:col+'18', display:'flex', alignItems:'center', justifyContent:'center' }}><Icon size={16} color={col}/></div>
-                <div style={{ color:C.navy, fontWeight:800, fontSize:20 }}>{v}</div>
-                <div style={{ color:C.faint, fontSize:11 }}>{l}</div>
-              </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
           <div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{t('nav.vehicles')}</div>
           <button onClick={()=>onNav('vehicles')} style={{ color:C.blue, fontSize:12, fontWeight:600, background:'none', border:'none', cursor:'pointer' }}>{t('common.seeAll')} →</button>
