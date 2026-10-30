@@ -7,7 +7,7 @@ import {
   Phone, Play, Pause, SkipBack, SkipForward,
   Eye, EyeOff, BarChart2, Cpu, Hexagon, Settings,
   Wrench, Droplets, CheckCircle, AlertCircle,
-  Languages, Edit, Users, Layers, LocateFixed,
+  Languages, Edit, Users, Layers, LocateFixed, ChevronDown,
 } from 'lucide-react'
 import { useApi } from '../hooks/useApi.js'
 import { api }    from '../api/client.js'
@@ -1249,6 +1249,53 @@ const MOCK = { '865784056472668': { '2026-09-10': [
   {lat:11.5660,lng:104.9400,time:'07:50',speed:70},{lat:11.5700,lng:104.9440,time:'08:00',speed:0},
 ]}}
 
+function VehiclePickerSheet({ vehicles, value, onChange }) {
+  const [open,   setOpen]   = useState(false)
+  const [search, setSearch] = useState('')
+  const selected = vehicles.find(v => v.imei === value)
+  const filtered = vehicles.filter(v => {
+    const q = search.toLowerCase()
+    return !q || v.name?.toLowerCase().includes(q) || v.plate?.toLowerCase().includes(q) || v.owner?.toLowerCase().includes(q)
+  })
+  return (
+    <>
+      <button onClick={() => { setSearch(''); setOpen(true) }}
+        style={{ flex:1, minWidth:0, display:'flex', alignItems:'center', gap:8, padding:'11px 10px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color: selected?C.navy:C.faint, outline:'none', background:'white', textAlign:'left', cursor:'pointer' }}>
+        <Car size={15} color={C.muted} style={{ flexShrink:0 }}/>
+        <span style={{ flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          {selected ? `${selected.name} — ${selected.plate}` : 'Select vehicle…'}
+        </span>
+        <ChevronDown size={15} color={C.faint} style={{ flexShrink:0 }}/>
+      </button>
+      {open && (
+        <Sheet title="Select Vehicle" onClose={() => setOpen(false)}>
+          <div style={{ marginBottom:12 }}>
+            <SearchBar value={search} onChange={setSearch} placeholder="Search name, plate, or driver…"/>
+          </div>
+          {filtered.length === 0 ? (
+            <div style={{ padding:'24px 0', textAlign:'center', color:C.faint, fontSize:13 }}>No vehicles match "{search}"</div>
+          ) : filtered.map(v => (
+            <button key={v.imei} onClick={() => { onChange(v.imei); setOpen(false) }}
+              style={{ width:'100%', display:'flex', alignItems:'center', gap:12, padding:'12px 10px', border:'none', borderBottom:'1px solid '+C.border, background: v.imei===value?'#EFF6FF':'white', cursor:'pointer', textAlign:'left' }}>
+              <div style={{ width:36, height:36, borderRadius:10, background:'#EFF6FF', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                <Car size={16} color={C.blue}/>
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:C.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{v.name}</div>
+                <div style={{ fontSize:12, color:C.faint }}>
+                  <span style={{ fontFamily:'monospace' }}>{v.plate}</span>
+                  {v.owner && v.owner !== 'Unassigned' && <span> · {v.owner}</span>}
+                </div>
+              </div>
+              {v.imei === value && <Check size={16} color={C.blue}/>}
+            </button>
+          ))}
+        </Sheet>
+      )}
+    </>
+  )
+}
+
 function HistoryScreen({ onBack }) {
   const { data:vehicles, loading:vL } = useApi(api.vehicles.list)
   const [imei,    setImei]    = useState('')
@@ -1378,19 +1425,16 @@ function HistoryScreen({ onBack }) {
       <Bar title={t('nav.history')} onBack={onBack} loading={vL||loading}/>
       <div style={{ background:C.card, padding:'10px 14px', borderBottom:'1px solid '+C.border, flexShrink:0 }}>
         <div style={{ display:'flex', gap:8, marginBottom:route.length?8:0 }}>
-          <select value={imei} onChange={e=>setImei(e.target.value)} style={{ flex:1, minWidth:0, padding:'11px 10px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none', background:'white' }}>
-            <option value="">Select vehicle…</option>
-            {vehicles.map(v=><option key={v.imei} value={v.imei}>{v.name}{v.plate?' — '+v.plate:''}</option>)}
-          </select>
+          <VehiclePickerSheet vehicles={vehicles} value={imei} onChange={setImei}/>
           <button onClick={()=>setDate(d=>addDays(d,-1))} aria-label="Previous day"
-            style={{ width:42, height:42, flexShrink:0, border:'1px solid '+C.border, borderRadius:10, background:'white', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:C.muted }}>
-            <ChevronLeft size={17}/>
+            style={{ width:38, height:42, flexShrink:0, border:'1px solid '+C.border, borderRadius:10, background:'white', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:C.muted }}>
+            <ChevronLeft size={16}/>
           </button>
           <input type="date" value={date} onChange={e=>setDate(e.target.value)}
-            style={{ width:118, flexShrink:0, padding:'11px 8px', border:'1px solid '+C.border, borderRadius:10, fontSize:15, color:C.navy, outline:'none' }}/>
+            style={{ width:102, flexShrink:0, padding:'11px 4px', border:'1px solid '+C.border, borderRadius:10, fontSize:14, color:C.navy, outline:'none' }}/>
           <button onClick={()=>setDate(d=>addDays(d,1))} disabled={date>=todayStr()} aria-label="Next day"
-            style={{ width:42, height:42, flexShrink:0, border:'1px solid '+C.border, borderRadius:10, background:'white', display:'flex', alignItems:'center', justifyContent:'center', cursor: date>=todayStr()?'not-allowed':'pointer', color: date>=todayStr()?'#CBD5E1':C.muted }}>
-            <ChevronRight size={17}/>
+            style={{ width:38, height:42, flexShrink:0, border:'1px solid '+C.border, borderRadius:10, background:'white', display:'flex', alignItems:'center', justifyContent:'center', cursor: date>=todayStr()?'not-allowed':'pointer', color: date>=todayStr()?'#CBD5E1':C.muted }}>
+            <ChevronRight size={16}/>
           </button>
         </div>
         {route.length>0 && (
