@@ -313,7 +313,7 @@ const GhostBtn = ({ label, onClick }) => (
 const TABS = [
   { id:'home',     labelKey:'mobile.home',     Icon:Home           },
   { id:'tracking', labelKey:'mobile.tracking', Icon:Map            },
-  { id:'vehicles', labelKey:'nav.vehicles',    Icon:Car            },
+  { id:'history',  labelKey:'nav.history',     Icon:Activity       },
   { id:'alerts',   labelKey:'nav.alerts',      Icon:Bell           },
   { id:'more',     labelKey:'mobile.more',     Icon:MoreHorizontal },
 ]
@@ -1256,9 +1256,13 @@ function HistoryScreen({ onBack }) {
   const [route,   setRoute]   = useState([])
   const [idx,     setIdx]     = useState(0)
   const [playing, setPlaying] = useState(false)
+  const [speed,   setSpeed]   = useState(1)
   const [ready,   setReady]   = useState(false)
+  const [loading, setLoading] = useState(false)
   const mapEl=useRef(null); const gmap=useRef(null); const marker=useRef(null); const poly=useRef(null); const endpoints=useRef([]); const timer=useRef(null)
   const [sat,setSat]=useState(()=>{try{return localStorage.getItem('kvh_map_sat')!=='0'}catch{return true}})
+  const todayStr = () => new Date().toISOString().slice(0,10)
+  const addDays = (d,n) => { const x=new Date(d+'T00:00:00'); x.setDate(x.getDate()+n); return x.toISOString().slice(0,10) }
   const dotIcon=(label,color)=>{
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="${color}" stroke="white" stroke-width="2"/><text x="12" y="16" font-family="system-ui" font-size="12" font-weight="700" fill="white" text-anchor="middle">${label}</text></svg>`
     return{
@@ -1306,50 +1310,123 @@ function HistoryScreen({ onBack }) {
     marker.current=new window.google.maps.Marker({position:latlngs[0],icon:playIcon(),map:gmap.current})
     const bounds=new window.google.maps.LatLngBounds()
     latlngs.forEach(p=>bounds.extend(p))
-    gmap.current.fitBounds(bounds,{top:30,left:30,right:30,bottom:120})
+    gmap.current.fitBounds(bounds,{top:30,left:30,right:30,bottom:150})
     setIdx(0)
   }
+  // Real trip distance (speed x time between fixes, not raw point jitter —
+  // see the same technique on the desktop History page) so this screen can
+  // show an actual km figure instead of nothing.
+  const MAX_GAP_HOURS = 10/60
   const load=()=>{
+    if(!imei||!date)return
+    setLoading(true)
     api.vehicles.history(imei, date).then(logs=>{
-      const r=(logs||[]).map(l=>({
-        lat:parseFloat(l.latitude), lng:parseFloat(l.longitude), speed:parseFloat(l.speed)||0,
-        time:new Date(l.timestamp).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Phnom_Penh'}),
-      }))
+      let cum=0
+      const r=(logs||[]).map((l,i,arr)=>{
+        const ts=new Date(l.timestamp).getTime()
+        const speed=parseFloat(l.speed)||0
+        if(i>0){
+          const prev=arr[i-1]
+          const dt=Math.min(Math.max((ts-new Date(prev.timestamp).getTime())/3600000,0),MAX_GAP_HOURS)
+          cum += ((speed+(parseFloat(prev.speed)||0))/2) * dt
+        }
+        return {
+          lat:parseFloat(l.latitude), lng:parseFloat(l.longitude), speed, ts, cumKm:cum,
+          time:new Date(l.timestamp).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Phnom_Penh'}),
+        }
+      })
       setRoute(r); setIdx(0); setPlaying(false); if(r.length&&ready)draw(r)
-    }).catch(()=>{ setRoute([]); setIdx(0); setPlaying(false) })
+    }).catch(()=>{ setRoute([]); setIdx(0); setPlaying(false) }).finally(()=>setLoading(false))
   }
-  useEffect(()=>{ clearInterval(timer.current); if(!playing||!route.length)return; timer.current=setInterval(()=>{ setIdx(p=>{ const n=p+1; if(n>=route.length){setPlaying(false);clearInterval(timer.current);return p}; if(marker.current)marker.current.setPosition({lat:route[n].lat,lng:route[n].lng}); return n }) },600); return()=>clearInterval(timer.current) },[playing,route])
+  // Auto-load whenever the vehicle/date changes (and once the map is ready),
+  // so there's no extra tap needed for the common case of just browsing.
+  useEffect(()=>{ if(imei&&date&&ready) load() },[imei,date,ready])
+
+  // Paced playback: each step's on-screen duration scales with the real
+  // time gap to the next fix (clamped + speed-scaled), same approach as
+  // the desktop page, instead of a flat timer that either crawls or races
+  // regardless of how the real fixes were spaced.
+  useEffect(()=>{
+    clearTimeout(timer.current)
+    if(!playing||route.length<2)return
+    let cancelled=false
+    const MIN_STEP=350, MAX_STEP=2200
+    const stepDur=(a,b)=>{
+      const gapSec = route[a]?.ts&&route[b]?.ts ? Math.max(0,(route[b].ts-route[a].ts)/1000) : 8
+      return Math.min(Math.max((gapSec*55)/speed, MIN_STEP), MAX_STEP)
+    }
+    const advance=(prev)=>{
+      const n=prev+1
+      if(n>=route.length){ setPlaying(false); return }
+      if(marker.current) marker.current.setPosition({lat:route[n].lat,lng:route[n].lng})
+      setIdx(n)
+      if(!cancelled) timer.current=setTimeout(()=>advance(n), stepDur(n, Math.min(n+1,route.length-1)))
+    }
+    timer.current=setTimeout(()=>advance(idx), stepDur(idx, Math.min(idx+1,route.length-1)))
+    return()=>{ cancelled=true; clearTimeout(timer.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[playing,speed,route])
+
   const go=n=>{ const i=Math.max(0,Math.min(route.length-1,n)); setIdx(i); if(marker.current&&route[i])marker.current.setPosition({lat:route[i].lat,lng:route[i].lng}) }
   const cur=route[idx]; const pct=route.length>1?(idx/(route.length-1)*100):0
+  const totalKm = route.length ? (route[route.length-1].cumKm||0).toFixed(1) : '0.0'
+  const maxSpeed = route.length ? Math.max(...route.map(r=>r.speed)) : 0
+  const selVehicle = vehicles.find(v=>v.imei===imei)
+
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
-      <Bar title={t('nav.history')} onBack={onBack} loading={vL}/>
+      <Bar title={t('nav.history')} onBack={onBack} loading={vL||loading}/>
       <div style={{ background:C.card, padding:'10px 14px', borderBottom:'1px solid '+C.border, flexShrink:0 }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:8, marginBottom:8 }}>
-          <select value={imei} onChange={e=>setImei(e.target.value)} style={{ padding:'10px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none', background:'white' }}>
-            <option value="">Select vehicle...</option>
-            {vehicles.map(v=><option key={v.imei} value={v.imei}>{v.name}</option>)}
+        <div style={{ display:'flex', gap:8, marginBottom:route.length?8:0 }}>
+          <select value={imei} onChange={e=>setImei(e.target.value)} style={{ flex:1, minWidth:0, padding:'11px 10px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none', background:'white' }}>
+            <option value="">Select vehicle…</option>
+            {vehicles.map(v=><option key={v.imei} value={v.imei}>{v.name}{v.plate?' — '+v.plate:''}</option>)}
           </select>
-          <input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{ padding:'10px', border:'1px solid '+C.border, borderRadius:10, fontSize:16, color:C.navy, outline:'none' }}/>
+          <button onClick={()=>setDate(d=>addDays(d,-1))} aria-label="Previous day"
+            style={{ width:42, height:42, flexShrink:0, border:'1px solid '+C.border, borderRadius:10, background:'white', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:C.muted }}>
+            <ChevronLeft size={17}/>
+          </button>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)}
+            style={{ width:118, flexShrink:0, padding:'11px 8px', border:'1px solid '+C.border, borderRadius:10, fontSize:15, color:C.navy, outline:'none' }}/>
+          <button onClick={()=>setDate(d=>addDays(d,1))} disabled={date>=todayStr()} aria-label="Next day"
+            style={{ width:42, height:42, flexShrink:0, border:'1px solid '+C.border, borderRadius:10, background:'white', display:'flex', alignItems:'center', justifyContent:'center', cursor: date>=todayStr()?'not-allowed':'pointer', color: date>=todayStr()?'#CBD5E1':C.muted }}>
+            <ChevronRight size={17}/>
+          </button>
         </div>
-        <button onClick={load} style={{ width:'100%', padding:'11px', background:C.blue, color:'white', border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer' }}>Load Route</button>
+        {route.length>0 && (
+          <div style={{ display:'flex', gap:6 }}>
+            {[
+              [route[0]?.time?.slice(0,5)+' → '+route[route.length-1]?.time?.slice(0,5), C.blue ],
+              [totalKm+' km',                                                              C.navy ],
+              ['Max '+Math.round(maxSpeed)+' km/h',                                        maxSpeed>80?C.red:C.green],
+            ].map(([label,color])=>(
+              <div key={label} style={{ flex:1, textAlign:'center', padding:'6px 4px', borderRadius:9, background:color+'14', color, fontSize:11, fontWeight:700 }}>{label}</div>
+            ))}
+          </div>
+        )}
       </div>
       <div style={{ flex:1, position:'relative', minHeight:0 }}>
         <div ref={mapEl} style={{ width:'100%', height:'100%' }}/>
         {ready && (
           <button onClick={()=>setSat(s=>{const n=!s; try{localStorage.setItem('kvh_map_sat', n?'1':'0')}catch{}; return n})} title={sat?'Satellite view on':'Switch to satellite view'}
-            style={{ position:'absolute', top:12, right:12, zIndex:10, width:40, height:40, borderRadius:10, border:'none', background:sat?C.blue:'white', color:sat?'white':C.navy, boxShadow:'0 2px 8px rgba(0,0,0,.2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            style={{ position:'absolute', top:12, right:12, zIndex:10, width:42, height:42, borderRadius:10, border:'none', background:sat?C.blue:'white', color:sat?'white':C.navy, boxShadow:'0 2px 8px rgba(0,0,0,.2)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <Layers size={18} color={sat?'white':C.blue}/>
           </button>
         )}
-        {route.length===0 && (
-          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:10, background:'rgba(240,247,255,.94)', pointerEvents:'none' }}>
-            <MapPin size={38} color={C.faint}/><div style={{ color:C.muted, fontSize:14 }}>Select vehicle and date, then tap Load</div>
+        {loading && (
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(240,247,255,.85)', zIndex:9 }}>
+            <Spinner size={30}/>
+          </div>
+        )}
+        {!loading && route.length===0 && (
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:10, background:'rgba(240,247,255,.94)', pointerEvents:'none', padding:24, textAlign:'center' }}>
+            <MapPin size={38} color={C.faint}/>
+            <div style={{ color:C.muted, fontSize:14 }}>{imei?'No GPS history for this day':'Select a vehicle to see its route'}</div>
           </div>
         )}
         {cur&&route.length>0 && (
-          <div style={{ position:'absolute', top:12, left:12, background:'white', borderRadius:12, padding:'10px 14px', boxShadow:'0 4px 16px rgba(0,0,0,.12)', border:'1px solid '+C.border }}>
-            <div style={{ color:C.faint, fontSize:10, marginBottom:4 }}>Current Point</div>
+          <div style={{ position:'absolute', top:12, left:12, right:66, background:'white', borderRadius:12, padding:'10px 14px', boxShadow:'0 4px 16px rgba(0,0,0,.12)', border:'1px solid '+C.border }}>
+            <div style={{ color:C.faint, fontSize:10, marginBottom:4 }}>{selVehicle?.name||''} &middot; Point {idx+1}/{route.length}</div>
             <div style={{ display:'flex', gap:16 }}>
               <div><div style={{ color:C.faint, fontSize:10 }}>Time</div><div style={{ color:C.navy, fontWeight:700, fontSize:14 }}>{cur.time}</div></div>
               <div><div style={{ color:C.faint, fontSize:10 }}>Speed</div><div style={{ color:cur.speed>60?C.red:cur.speed===0?C.muted:C.green, fontWeight:700, fontSize:14 }}>{cur.speed} km/h</div></div>
@@ -1358,22 +1435,36 @@ function HistoryScreen({ onBack }) {
         )}
       </div>
       {route.length>0 && (
-        <div style={{ background:'white', borderTop:'1px solid '+C.border, padding:'10px 14px', paddingBottom:'max(10px,env(safe-area-inset-bottom))', flexShrink:0 }}>
-          <div style={{ background:C.bg, borderRadius:4, height:6, marginBottom:6, cursor:'pointer', position:'relative' }} onClick={e=>{ const r=e.currentTarget.getBoundingClientRect(); go(Math.round((e.clientX-r.left)/r.width*(route.length-1))) }}>
-            <div style={{ position:'absolute', top:0, left:0, bottom:0, width:pct+'%', background:C.blue, borderRadius:4 }}/>
-            <div style={{ position:'absolute', top:'50%', left:pct+'%', transform:'translate(-50%,-50%)', width:14, height:14, borderRadius:'50%', background:'white', border:'2px solid '+C.blue }}/>
+        <div style={{ background:'white', borderTop:'1px solid '+C.border, padding:'12px 14px', paddingBottom:'max(12px,env(safe-area-inset-bottom))', flexShrink:0 }}>
+          {/* Scrubber — extra vertical padding around the thin bar gives a much
+              bigger finger-friendly hit area without making the bar itself
+              look chunky. */}
+          <div style={{ padding:'10px 0', marginBottom:2, cursor:'pointer' }}
+            onClick={e=>{ const r=e.currentTarget.getBoundingClientRect(); go(Math.round((e.clientX-r.left)/r.width*(route.length-1))) }}>
+            <div style={{ background:C.bg, borderRadius:4, height:7, position:'relative' }}>
+              <div style={{ position:'absolute', top:0, left:0, bottom:0, width:pct+'%', background:C.blue, borderRadius:4 }}/>
+              <div style={{ position:'absolute', top:'50%', left:pct+'%', transform:'translate(-50%,-50%)', width:18, height:18, borderRadius:'50%', background:'white', border:'3px solid '+C.blue, boxShadow:'0 1px 4px rgba(0,0,0,.2)' }}/>
+            </div>
           </div>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:10, color:C.faint, marginBottom:10 }}>
             <span>{route[0]?.time}</span><span>{idx+1}/{route.length}</span><span>{route[route.length-1]?.time}</span>
           </div>
-          <div style={{ display:'flex', justifyContent:'center', gap:8 }}>
-            <IconBtn icon={SkipBack}    onClick={()=>go(0)}/>
-            <IconBtn icon={ChevronLeft} onClick={()=>go(idx-1)}/>
-            <button onClick={()=>setPlaying(p=>!p)} style={{ width:54, height:40, background:playing?C.red:C.blue, border:'none', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            <button onClick={()=>go(0)} style={{ width:44, height:44, background:C.bg, border:'none', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}><SkipBack size={18} color={C.navy}/></button>
+            <button onClick={()=>go(idx-1)} style={{ width:44, height:44, background:C.bg, border:'none', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}><ChevronLeft size={18} color={C.navy}/></button>
+            <button onClick={()=>setPlaying(p=>!p)} style={{ width:58, height:44, background:playing?C.red:C.blue, border:'none', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}>
               {playing?<Pause size={20} color="white"/>:<Play size={20} color="white"/>}
             </button>
-            <IconBtn icon={ChevronRight} onClick={()=>go(idx+1)}/>
-            <IconBtn icon={SkipForward}  onClick={()=>go(route.length-1)}/>
+            <button onClick={()=>go(idx+1)} style={{ width:44, height:44, background:C.bg, border:'none', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}><ChevronRight size={18} color={C.navy}/></button>
+            <button onClick={()=>go(route.length-1)} style={{ width:44, height:44, background:C.bg, border:'none', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0 }}><SkipForward size={18} color={C.navy}/></button>
+          </div>
+          <div style={{ display:'flex', justifyContent:'center', gap:6, marginTop:10 }}>
+            {[1,2,4].map(s=>(
+              <button key={s} onClick={()=>setSpeed(s)}
+                style={{ padding:'6px 16px', borderRadius:8, border:'none', cursor:'pointer', fontSize:12, fontWeight:700, background: speed===s?C.navy:C.bg, color: speed===s?'white':C.muted }}>
+                {s}x
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -1777,6 +1868,7 @@ function FuelScreen({ onBack }) {
 function MoreScreen({ user, onLogout, onNav }) {
   const groups = [
     { title:t('mobile.fleet'),     items:[
+        { l:t('nav.vehicles'),    I:Car,      n:'vehicles'    },
         { l:t('nav.drivers'),     I:User,     n:'drivers'     },
         { l:t('nav.devices'),     I:Cpu,      n:'devices'     },
         { l:t('nav.geofences'),   I:Hexagon,  n:'geofences'   },
@@ -1861,7 +1953,7 @@ export default function MobileApp({ user, onLogout, lang, onToggleLanguage }) {
       case 'devices':     return <DevicesScreen     onBack={()=>setPage('more')}/>
       case 'geofences':   return <GeofencesScreen   onBack={()=>setPage('more')}/>
       case 'reports':     return <ReportsScreen     onBack={()=>setPage('more')}/>
-      case 'history':     return <HistoryScreen     onBack={()=>setPage('more')}/>
+      case 'history':     return <HistoryScreen     onBack={undefined}/>
       case 'users':       return <UsersScreen       onBack={()=>setPage('more')} user={user}/>
       case 'settings':    return <SettingsScreen    onBack={()=>setPage('more')} user={user} lang={lang} onToggleLanguage={onToggleLanguage}/>
       case 'maintenance': return <MaintenanceScreen onBack={()=>setPage('more')}/>
