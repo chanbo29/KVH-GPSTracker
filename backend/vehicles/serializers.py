@@ -244,3 +244,54 @@ class FuelLogSerializer(serializers.ModelSerializer):
         if obj.distance_since_last and obj.distance_since_last > 0:
             return round(float(obj.total_cost) / obj.distance_since_last, 3)
         return None
+
+
+from .models import SparePart, StockMovement, VehicleDocument, Expense
+from django.utils import timezone as _tz
+
+
+class SparePartSerializer(serializers.ModelSerializer):
+    stock_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = SparePart
+        fields = '__all__'
+
+    def get_stock_status(self, obj):
+        if obj.quantity <= 0:
+            return 'out'
+        if obj.quantity <= obj.reorder_level:
+            return 'low'
+        return 'ok'
+
+
+class StockMovementSerializer(serializers.ModelSerializer):
+    part_name = serializers.CharField(source='part.name', read_only=True)
+
+    class Meta:
+        model  = StockMovement
+        fields = '__all__'
+
+
+class VehicleDocumentSerializer(serializers.ModelSerializer):
+    expiry_status = serializers.SerializerMethodField()
+
+    class Meta:
+        model  = VehicleDocument
+        fields = '__all__'
+
+    def get_expiry_status(self, obj):
+        if not obj.expiry_date:
+            return 'unknown'
+        days = (obj.expiry_date - _tz.localdate()).days
+        if days < 0:
+            return 'expired'
+        if days <= 30:
+            return 'expiring_soon'
+        return 'valid'
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Expense
+        fields = '__all__'

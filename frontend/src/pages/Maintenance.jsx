@@ -290,6 +290,9 @@ export default function Maintenance() {
     setForm({ ...BLANK, date: new Date().toISOString().slice(0,10) })
     setEditId(null); setServiceSearch(''); setModal('add')
   }
+  useEffect(() => {
+    if (sessionStorage.getItem('kvh_menu_add') === 'maintenance') { sessionStorage.removeItem('kvh_menu_add'); openAdd() }
+  }, [])
   const openEdit = row => {
     setForm({
       vehicle_id:    String(row.vehicle_id),

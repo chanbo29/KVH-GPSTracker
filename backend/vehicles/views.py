@@ -6,9 +6,14 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.generics import get_object_or_404
-from django.db import IntegrityError
+from django.db import IntegrityError, models as djmodels
 from .models import MaintenanceLog, FuelLog
 from .serializers import MaintenanceLogSerializer, FuelLogSerializer
+from .models import SparePart, StockMovement, VehicleDocument, Expense
+from .serializers import (
+    SparePartSerializer, StockMovementSerializer,
+    VehicleDocumentSerializer, ExpenseSerializer,
+)
 
 from .models import Vehicle, GPSLog, Driver, Alert, GPSDevice, Client, Geofence
 from .serializers import (
@@ -385,6 +390,79 @@ class FuelLogViewSet(viewsets.ModelViewSet):
         distance = (odometer - last.odometer) if last and odometer > last.odometer else 0
         serializer.save(distance_since_last=distance)
  
+    def destroy(self, request, *args, **kwargs):
+        self.get_object().delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class SparePartViewSet(viewsets.ModelViewSet):
+    queryset         = SparePart.objects.all()
+    serializer_class = SparePartSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        category = self.request.query_params.get('category')
+        if category: qs = qs.filter(category=category)
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        self.get_object().delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StockMovementViewSet(viewsets.ModelViewSet):
+    queryset         = StockMovement.objects.all()
+    serializer_class = StockMovementSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        part_id = self.request.query_params.get('part_id')
+        if part_id: qs = qs.filter(part_id=part_id)
+        return qs
+
+    def perform_create(self, serializer):
+        movement = serializer.save()
+        delta = movement.quantity if movement.movement_type == 'in' else -movement.quantity
+        SparePart.objects.filter(pk=movement.part_id).update(
+            quantity=djmodels.F('quantity') + delta
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        movement = self.get_object()
+        delta = -movement.quantity if movement.movement_type == 'in' else movement.quantity
+        SparePart.objects.filter(pk=movement.part_id).update(
+            quantity=djmodels.F('quantity') + delta
+        )
+        movement.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class VehicleDocumentViewSet(viewsets.ModelViewSet):
+    queryset         = VehicleDocument.objects.all()
+    serializer_class = VehicleDocumentSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        vehicle_id = self.request.query_params.get('vehicle_id')
+        if vehicle_id: qs = qs.filter(vehicle_id=vehicle_id)
+        return qs
+
+    def destroy(self, request, *args, **kwargs):
+        self.get_object().delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ExpenseViewSet(viewsets.ModelViewSet):
+    queryset         = Expense.objects.all()
+    serializer_class = ExpenseSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        vehicle_id = self.request.query_params.get('vehicle_id')
+        category   = self.request.query_params.get('category')
+        if vehicle_id: qs = qs.filter(vehicle_id=vehicle_id)
+        if category:   qs = qs.filter(category=category)
+        return qs
+
     def destroy(self, request, *args, **kwargs):
         self.get_object().delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

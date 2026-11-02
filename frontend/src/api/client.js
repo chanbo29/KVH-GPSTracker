@@ -86,4 +86,34 @@ export const api = {
     update: (id, d)  => put(`/fuel/${id}/`, d),
     delete: (id)     => del(`/fuel/${id}/`),
   },
+
+  spareparts: {
+    list:   ()       => get(`/spareparts/`),
+    get:    (id)     => get(`/spareparts/${id}/`),
+    create: (data)   => post(`/spareparts/`, data),
+    update: (id, d)  => put(`/spareparts/${id}/`, d),
+    delete: (id)     => del(`/spareparts/${id}/`),
+  },
+
+  stockMovements: {
+    list:   (partId) => get(`/stockmovements/${partId ? `?part_id=${partId}` : ''}`),
+    create: (data)   => post(`/stockmovements/`, data),
+    delete: (id)     => del(`/stockmovements/${id}/`),
+  },
+
+  vehicleDocuments: {
+    list:   ()       => get(`/vehicledocuments/`),
+    get:    (id)     => get(`/vehicledocuments/${id}/`),
+    create: (data)   => post(`/vehicledocuments/`, data),
+    update: (id, d)  => put(`/vehicledocuments/${id}/`, d),
+    delete: (id)     => del(`/vehicledocuments/${id}/`),
+  },
+
+  expenses: {
+    list:   ()       => get(`/expenses/`),
+    get:    (id)     => get(`/expenses/${id}/`),
+    create: (data)   => post(`/expenses/`, data),
+    update: (id, d)  => put(`/expenses/${id}/`, d),
+    delete: (id)     => del(`/expenses/${id}/`),
+  },
 }

@@ -225,6 +225,9 @@ export default function Vehicles({ onNavigate }) {
 
   /* ── Modals ─────────────────────────────────────────── */
   const openAdd  = ()  => { setForm(BLANK); setEditId(null); setEditVehicleId(null); setModal('add') }
+  useEffect(() => {
+    if (sessionStorage.getItem('kvh_menu_add') === 'vehicles') { sessionStorage.removeItem('kvh_menu_add'); openAdd() }
+  }, [])
   const openEdit = v   => {
     const dev = devices.find(d=>d.imei===v.imei)
     setForm({ name:v.name||'', type:v.type||'Sedan', plate:v.plate||'', driver:v.owner||'', imei:v.imei||'', sim_number:dev?.sim_number||'', protocol:dev?.protocol||'GT06' })

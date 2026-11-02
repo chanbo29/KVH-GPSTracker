@@ -1,55 +1,77 @@
 import { C } from '../constants/colors.js'
 import { t } from '../constants/i18n.js'
 import {
-  Map, Car, Cpu, User, Hexagon,
+  Map, Car, Cpu, User, Hexagon, Plus, List,
   Clock, AlertTriangle, FileText,
   Wrench, Droplets,
   Users, Settings,
+  Package, ShieldCheck, Receipt,
 } from 'lucide-react'
 
 /* Grouped icon-tile launcher -- mirrors a classic ops-console "Menu" screen:
    gray section bars, a uniform grid of square tiles, icon on top / label below.
-   Each tile reuses the real sidebar destinations, so Menu is a visual
-   shortcut-board on top of the same navigation the sidebar already has. */
+   Pages that combine "Add" + "List" in one screen (Vehicles, Drivers,
+   Maintenance, Fuel, Spare Parts, Documents, Expenses) get split into two
+   tiles here: the "Add ..." tile sets a one-shot sessionStorage flag that
+   the target page reads on mount to auto-open its Add modal, so a single
+   underlying page still powers both shortcuts. */
 const GROUPS = [
   {
     titleKey: 'menu.section.fleet',
     tiles: [
-      { id: 'live',      labelKey: 'nav.live',      Icon: Map,      color: C.accent, bg: C.accentL },
-      { id: 'vehicles',  labelKey: 'nav.vehicles',  Icon: Car,      color: C.green,  bg: C.greenL  },
-      { id: 'drivers',   labelKey: 'nav.drivers',   Icon: User,     color: C.blue,   bg: C.blueL   },
-      { id: 'devices',   labelKey: 'nav.devices',   Icon: Cpu,      color: C.mid,    bg: '#F8FAFC' },
-      { id: 'geofences', labelKey: 'nav.geofences', Icon: Hexagon,  color: C.purple, bg: C.purpleL },
+      { page: 'live',      labelKey: 'menu.tile.liveTracking', Icon: Map,     color: C.accent, bg: C.accentL },
+      { page: 'vehicles',  addKey: 'vehicles', labelKey: 'menu.tile.addVehicle',  Icon: Plus, color: C.green,  bg: C.greenL },
+      { page: 'vehicles',  labelKey: 'menu.tile.vehicleList',                     Icon: List, color: C.green,  bg: C.greenL },
+      { page: 'drivers',   addKey: 'drivers',  labelKey: 'menu.tile.addDriver',   Icon: Plus, color: C.blue,   bg: C.blueL  },
+      { page: 'drivers',   labelKey: 'menu.tile.driverList',                      Icon: List, color: C.blue,   bg: C.blueL  },
+      { page: 'devices',   labelKey: 'nav.devices',   Icon: Cpu,     color: C.mid,    bg: '#F8FAFC' },
+      { page: 'geofences', labelKey: 'nav.geofences', Icon: Hexagon, color: C.purple, bg: C.purpleL },
     ],
   },
   {
     titleKey: 'menu.section.operations',
     tiles: [
-      { id: 'history', labelKey: 'nav.history', Icon: Clock,         color: C.accent, bg: C.accentL },
-      { id: 'alerts',  labelKey: 'nav.alerts',  Icon: AlertTriangle, color: C.red,    bg: C.redL    },
-      { id: 'reports', labelKey: 'nav.reports', Icon: FileText,      color: C.mid,    bg: '#F8FAFC' },
+      { page: 'history', labelKey: 'nav.history', Icon: Clock,         color: C.accent, bg: C.accentL },
+      { page: 'alerts',  labelKey: 'nav.alerts',  Icon: AlertTriangle, color: C.red,    bg: C.redL    },
+      { page: 'reports', labelKey: 'nav.reports', Icon: FileText,      color: C.mid,    bg: '#F8FAFC' },
     ],
   },
   {
     titleKey: 'menu.section.maintenance',
     tiles: [
-      { id: 'maintenance', labelKey: 'nav.maintenance', Icon: Wrench,   color: C.amber, bg: C.amberL },
-      { id: 'fuel',        labelKey: 'nav.fuel',        Icon: Droplets, color: C.blue,  bg: C.blueL  },
+      { page: 'maintenance', addKey: 'maintenance', labelKey: 'menu.tile.addMaintenance',     Icon: Plus, color: C.amber, bg: C.amberL },
+      { page: 'maintenance', labelKey: 'menu.tile.maintenanceHistory',                          Icon: List, color: C.amber, bg: C.amberL },
+      { page: 'fuel',        addKey: 'fuel',        labelKey: 'menu.tile.addFuel',               Icon: Plus, color: C.blue,  bg: C.blueL  },
+      { page: 'fuel',        labelKey: 'menu.tile.fuelHistory',                                   Icon: List, color: C.blue,  bg: C.blueL  },
+    ],
+  },
+  {
+    titleKey: 'menu.section.inventory',
+    tiles: [
+      { page: 'spareparts', addKey: 'spareparts', labelKey: 'menu.tile.addPart',    Icon: Plus, color: C.green, bg: C.greenL },
+      { page: 'spareparts', labelKey: 'menu.tile.partsList',                          Icon: Package, color: C.green, bg: C.greenL },
+      { page: 'documents',  addKey: 'documents',  labelKey: 'menu.tile.addDocument', Icon: Plus, color: C.blue,  bg: C.blueL  },
+      { page: 'documents',  labelKey: 'menu.tile.documentsList',                      Icon: ShieldCheck, color: C.blue, bg: C.blueL },
+      { page: 'expenses',   addKey: 'expenses',   labelKey: 'menu.tile.addExpense',  Icon: Plus, color: C.red,   bg: C.redL   },
+      { page: 'expenses',   labelKey: 'menu.tile.expenseList',                        Icon: Receipt, color: C.red, bg: C.redL },
     ],
   },
   {
     titleKey: 'menu.section.admin',
     tiles: [
-      { id: 'users',    labelKey: 'nav.users',    Icon: Users,    color: C.mid, bg: '#F8FAFC' },
-      { id: 'settings', labelKey: 'nav.settings', Icon: Settings, color: C.mid, bg: '#F8FAFC' },
+      { page: 'users',    labelKey: 'nav.users',    Icon: Users,    color: C.mid, bg: '#F8FAFC' },
+      { page: 'settings', labelKey: 'nav.settings', Icon: Settings, color: C.mid, bg: '#F8FAFC' },
     ],
   },
 ]
 
-function Tile({ id, labelKey, Icon, color, bg, onNavigate }) {
+function Tile({ page, addKey, labelKey, Icon, color, bg, onNavigate }) {
   return (
     <button
-      onClick={() => onNavigate(id)}
+      onClick={() => {
+        if (addKey) sessionStorage.setItem('kvh_menu_add', addKey)
+        onNavigate(page)
+      }}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9,
         padding: '16px 6px 12px', background: C.card, border: `1px solid ${C.border}`,
@@ -96,8 +118,8 @@ export default function Menu({ navigate, onNavigate }) {
             gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))',
             gap: 12,
           }}>
-            {group.tiles.map(tile => (
-              <Tile key={tile.id} {...tile} onNavigate={nav}/>
+            {group.tiles.map((tile, i) => (
+              <Tile key={tile.page + '-' + (tile.addKey || tile.labelKey) + '-' + i} {...tile} onNavigate={nav}/>
             ))}
           </div>
         </div>

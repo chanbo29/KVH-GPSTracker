@@ -23,6 +23,7 @@ const SECTIONS = [
   { labelKey: 'sidebar.section.overview',   ids: ['dashboard', 'live', 'menu'] },
   { labelKey: 'sidebar.section.fleet',      ids: ['vehicles', 'devices', 'drivers', 'geofences'] },
   { labelKey: 'sidebar.section.operations', ids: ['history', 'alerts', 'reports', 'maintenance', 'fuel'] },
+  { labelKey: 'sidebar.section.inventory',  ids: ['spareparts', 'documents', 'expenses'] },
   { labelKey: 'sidebar.section.admin',      ids: ['users', 'settings', 'sms'] },
 ]
 

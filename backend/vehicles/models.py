@@ -192,3 +192,109 @@ class FuelLog(models.Model):
     class Meta:
         db_table = 'FuelLogs'
         ordering = ['-date']
+
+class SparePart(models.Model):
+    CATEGORIES = [
+        ('Engine',      'Engine'),
+        ('Brakes',      'Brakes'),
+        ('Tires',       'Tires'),
+        ('Electrical',  'Electrical'),
+        ('Body',        'Body'),
+        ('Filters',     'Filters'),
+        ('Fluids',      'Fluids'),
+        ('Other',       'Other'),
+    ]
+    part_id       = models.AutoField(primary_key=True)
+    name          = models.CharField(max_length=150)
+    part_number   = models.CharField(max_length=100, blank=True)
+    category      = models.CharField(max_length=20, choices=CATEGORIES, default='Other')
+    unit          = models.CharField(max_length=20, default='pcs')
+    quantity      = models.IntegerField(default=0)
+    reorder_level = models.IntegerField(default=0)
+    unit_price    = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    supplier      = models.CharField(max_length=150, blank=True)
+    location      = models.CharField(max_length=100, blank=True)
+    notes         = models.TextField(blank=True)
+    created_at    = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'SpareParts'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class StockMovement(models.Model):
+    MOVEMENT_TYPES = [
+        ('in',  'Stock In'),
+        ('out', 'Stock Out'),
+    ]
+    movement_id   = models.AutoField(primary_key=True)
+    part          = models.ForeignKey(SparePart, on_delete=models.CASCADE, related_name='movements')
+    movement_type = models.CharField(max_length=10, choices=MOVEMENT_TYPES)
+    quantity      = models.IntegerField()
+    vehicle_id    = models.IntegerField(null=True, blank=True)
+    vehicle_name  = models.CharField(max_length=100, blank=True)
+    date          = models.DateField()
+    reference     = models.CharField(max_length=150, blank=True)
+    notes         = models.TextField(blank=True)
+    created_at    = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'StockMovements'
+        ordering = ['-date', '-movement_id']
+
+
+class VehicleDocument(models.Model):
+    DOC_TYPES = [
+        ('insurance',   'Insurance'),
+        ('road_tax',    'Road Tax'),
+        ('inspection',  'Inspection'),
+        ('registration','Registration'),
+        ('permit',      'Permit'),
+        ('other',       'Other'),
+    ]
+    document_id    = models.AutoField(primary_key=True)
+    vehicle_id      = models.IntegerField()
+    vehicle_name    = models.CharField(max_length=100)
+    doc_type        = models.CharField(max_length=20, choices=DOC_TYPES, default='other')
+    document_number = models.CharField(max_length=100, blank=True)
+    issuer          = models.CharField(max_length=150, blank=True)
+    issue_date      = models.DateField(null=True, blank=True)
+    expiry_date     = models.DateField()
+    cost            = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    notes           = models.TextField(blank=True)
+    created_at      = models.DateTimeField(auto_now_add=True)
+    updated_at      = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'VehicleDocuments'
+        ordering = ['expiry_date']
+
+
+class Expense(models.Model):
+    CATEGORIES = [
+        ('repair',   'Repair'),
+        ('parts',    'Parts'),
+        ('fuel',     'Fuel'),
+        ('insurance','Insurance'),
+        ('document', 'Document/Permit'),
+        ('fine',     'Fine'),
+        ('other',    'Other'),
+    ]
+    expense_id   = models.AutoField(primary_key=True)
+    vehicle_id   = models.IntegerField(null=True, blank=True)
+    vehicle_name = models.CharField(max_length=100, blank=True)
+    category     = models.CharField(max_length=20, choices=CATEGORIES, default='other')
+    amount       = models.DecimalField(max_digits=10, decimal_places=2)
+    date         = models.DateField()
+    description  = models.CharField(max_length=255, blank=True)
+    receipt_no   = models.CharField(max_length=100, blank=True)
+    notes        = models.TextField(blank=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'Expenses'
+        ordering = ['-date']

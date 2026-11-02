@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Plus, Search, Phone, Trash2, Edit,
   User, Users, CheckCircle, XCircle,
@@ -232,6 +232,9 @@ export default function Drivers() {
   }),[drivers, vehicles, search, filter])
 
   const openAdd = () => { setForm(BLANK); setEditId(null); setModal('add') }
+  useEffect(() => {
+    if (sessionStorage.getItem('kvh_menu_add') === 'drivers') { sessionStorage.removeItem('kvh_menu_add'); openAdd() }
+  }, [])
   const openView = d => { setViewing(d); setModal('view') }
   const openEdit = d => {
     setForm({ name:d.name||'', phone:d.phone||'', license:d.license||'', status:d.status||'active' })

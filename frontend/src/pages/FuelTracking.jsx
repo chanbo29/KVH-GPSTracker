@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   Plus, Edit, Trash2, Fuel, X, Save, Search,
   TrendingDown, DollarSign, Droplets, Activity,
@@ -110,6 +110,9 @@ export default function FuelTracking() {
     setForm({ ...BLANK, date: new Date().toISOString().slice(0,10) })
     setEditId(null); setModal('add')
   }
+  useEffect(() => {
+    if (sessionStorage.getItem('kvh_menu_add') === 'fuel') { sessionStorage.removeItem('kvh_menu_add'); openAdd() }
+  }, [])
   const openEdit = row => {
     setForm({
       vehicle_id:    String(row.vehicle_id),
