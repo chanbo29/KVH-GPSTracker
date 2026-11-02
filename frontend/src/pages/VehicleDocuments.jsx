@@ -23,7 +23,7 @@ const DOC_TYPES = [
   ['other',        'Other'],
 ]
 const BLANK = {
-  vehicle_id:'', vehicle_name:'', doc_type:'insurance', document_number:'',
+  vehicle_name:'', doc_type:'insurance', document_number:'',
   issuer:'', issue_date:'', expiry_date:'', cost:'0', notes:'',
 }
 
@@ -37,7 +37,6 @@ function expiryInfo(doc) {
 
 export default function VehicleDocuments() {
   const { data:docs, setData:setDocs, loading } = useApi(api.vehicleDocuments.list)
-  const { data:vehicles }                       = useApi(api.vehicles.list)
 
   const [modal,  setModal]  = useState(null)
   const [form,   setForm]   = useState(BLANK)
@@ -69,7 +68,7 @@ export default function VehicleDocuments() {
   }, [])
   const openEdit = row => {
     setForm({
-      vehicle_id: String(row.vehicle_id), vehicle_name: row.vehicle_name, doc_type: row.doc_type,
+      vehicle_name: row.vehicle_name, doc_type: row.doc_type,
       document_number: row.document_number || '', issuer: row.issuer || '',
       issue_date: row.issue_date || '', expiry_date: row.expiry_date || '',
       cost: String(row.cost || 0), notes: row.notes || '',
@@ -79,11 +78,10 @@ export default function VehicleDocuments() {
   const closeModal = () => { setModal(null); setForm(BLANK); setEditId(null) }
 
   const save = async () => {
-    if (!form.vehicle_id || !form.expiry_date) { alert('Vehicle and expiry date are required'); return }
+    if (!form.vehicle_name || !form.expiry_date) { alert('Name and expiry date are required'); return }
     setSaving(true)
     try {
-      const vName = vehicles.find(v => String(v.vehicle_id) === form.vehicle_id)?.name || form.vehicle_name
-      const payload = { ...form, vehicle_name: vName, cost: Number(form.cost) || 0 }
+      const payload = { ...form, cost: Number(form.cost) || 0 }
       if (modal === 'add') {
         const r = await api.vehicleDocuments.create(payload)
         setDocs(p => [r, ...p])
@@ -224,12 +222,9 @@ export default function VehicleDocuments() {
             <div style={{ overflowY:'auto', padding:'20px 24px', display:'flex', flexDirection:'column', gap:14 }}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 <div>
-                  <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.muted, marginBottom:5 }}>Vehicle *</label>
-                  <select value={form.vehicle_id} onChange={e => { const v = vehicles.find(x => String(x.vehicle_id)===e.target.value); fld('vehicle_id', e.target.value); if(v) fld('vehicle_name', v.name) }}
-                    style={{ width:'100%', padding:'10px 12px', border:BORDER, borderRadius:9, fontSize:13, color:C.navy, outline:'none', background:'white' }}>
-                    <option value="">Select vehicle…</option>
-                    {vehicles.map(v => <option key={v.vehicle_id} value={String(v.vehicle_id)}>{v.name} — {v.plate}</option>)}
-                  </select>
+                  <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.muted, marginBottom:5 }}>Name / Vehicle *</label>
+                  <input value={form.vehicle_name} onChange={e => fld('vehicle_name', e.target.value)} placeholder="e.g. Motor_1, Office Building…"
+                    style={{ width:'100%', padding:'10px 12px', border:BORDER, borderRadius:9, fontSize:13, color:C.navy, outline:'none', boxSizing:'border-box' }}/>
                 </div>
                 <div>
                   <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.muted, marginBottom:5 }}>Document Type</label>
@@ -280,7 +275,7 @@ export default function VehicleDocuments() {
 
             <div style={{ padding:'16px 24px', borderTop:BORDER, display:'flex', gap:10, justifyContent:'flex-end', flexShrink:0 }}>
               <Btn onClick={closeModal}>Cancel</Btn>
-              <Btn variant="primary" onClick={save} disabled={saving || !form.vehicle_id || !form.expiry_date}>
+              <Btn variant="primary" onClick={save} disabled={saving || !form.vehicle_name || !form.expiry_date}>
                 {saving ? <><Spinner size={14} color="white"/> Saving…</> : <><Save size={14}/>{modal === 'add' ? 'Add Document' : 'Save Changes'}</>}
               </Btn>
             </div>

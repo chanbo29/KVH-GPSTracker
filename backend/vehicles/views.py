@@ -440,12 +440,6 @@ class VehicleDocumentViewSet(viewsets.ModelViewSet):
     queryset         = VehicleDocument.objects.all()
     serializer_class = VehicleDocumentSerializer
 
-    def get_queryset(self):
-        qs = super().get_queryset()
-        vehicle_id = self.request.query_params.get('vehicle_id')
-        if vehicle_id: qs = qs.filter(vehicle_id=vehicle_id)
-        return qs
-
     def destroy(self, request, *args, **kwargs):
         self.get_object().delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -457,10 +451,8 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        vehicle_id = self.request.query_params.get('vehicle_id')
-        category   = self.request.query_params.get('category')
-        if vehicle_id: qs = qs.filter(vehicle_id=vehicle_id)
-        if category:   qs = qs.filter(category=category)
+        category = self.request.query_params.get('category')
+        if category: qs = qs.filter(category=category)
         return qs
 
     def destroy(self, request, *args, **kwargs):

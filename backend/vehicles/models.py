@@ -235,7 +235,6 @@ class StockMovement(models.Model):
     part          = models.ForeignKey(SparePart, on_delete=models.CASCADE, related_name='movements')
     movement_type = models.CharField(max_length=10, choices=MOVEMENT_TYPES)
     quantity      = models.IntegerField()
-    vehicle_id    = models.IntegerField(null=True, blank=True)
     vehicle_name  = models.CharField(max_length=100, blank=True)
     date          = models.DateField()
     reference     = models.CharField(max_length=150, blank=True)
@@ -257,7 +256,6 @@ class VehicleDocument(models.Model):
         ('other',       'Other'),
     ]
     document_id    = models.AutoField(primary_key=True)
-    vehicle_id      = models.IntegerField()
     vehicle_name    = models.CharField(max_length=100)
     doc_type        = models.CharField(max_length=20, choices=DOC_TYPES, default='other')
     document_number = models.CharField(max_length=100, blank=True)
@@ -285,7 +283,6 @@ class Expense(models.Model):
         ('other',    'Other'),
     ]
     expense_id   = models.AutoField(primary_key=True)
-    vehicle_id   = models.IntegerField(null=True, blank=True)
     vehicle_name = models.CharField(max_length=100, blank=True)
     category     = models.CharField(max_length=20, choices=CATEGORIES, default='other')
     amount       = models.DecimalField(max_digits=10, decimal_places=2)

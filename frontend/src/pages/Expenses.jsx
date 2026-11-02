@@ -30,11 +30,10 @@ const CAT_COLOR = {
   repair:C.red, parts:C.blue, fuel:C.amber, insurance:C.purple,
   document:'#0891B2', fine:'#334155', other:C.muted,
 }
-const BLANK = { vehicle_id:'', vehicle_name:'', category:'repair', amount:'', date:'', description:'', receipt_no:'', notes:'' }
+const BLANK = { vehicle_name:'', category:'repair', amount:'', date:'', description:'', receipt_no:'', notes:'' }
 
 export default function Expenses() {
   const { data:expenses, setData:setExpenses, loading } = useApi(api.expenses.list)
-  const { data:vehicles }                                = useApi(api.vehicles.list)
 
   const [modal,  setModal]  = useState(null)
   const [form,   setForm]   = useState(BLANK)
@@ -75,7 +74,7 @@ export default function Expenses() {
   }, [])
   const openEdit = row => {
     setForm({
-      vehicle_id: row.vehicle_id ? String(row.vehicle_id) : '', vehicle_name: row.vehicle_name || '',
+      vehicle_name: row.vehicle_name || '',
       category: row.category, amount: String(row.amount), date: row.date,
       description: row.description || '', receipt_no: row.receipt_no || '', notes: row.notes || '',
     })
@@ -87,8 +86,7 @@ export default function Expenses() {
     if (!form.amount || !form.date) { alert('Amount and date are required'); return }
     setSaving(true)
     try {
-      const vName = vehicles.find(v => String(v.vehicle_id) === form.vehicle_id)?.name || form.vehicle_name
-      const payload = { ...form, vehicle_name: vName, vehicle_id: form.vehicle_id || null, amount: Number(form.amount) }
+      const payload = { ...form, amount: Number(form.amount) }
       if (modal === 'add') {
         const r = await api.expenses.create(payload)
         setExpenses(p => [r, ...p])
@@ -248,12 +246,9 @@ export default function Expenses() {
             <div style={{ overflowY:'auto', padding:'20px 24px', display:'flex', flexDirection:'column', gap:14 }}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 <div>
-                  <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.muted, marginBottom:5 }}>Vehicle (optional)</label>
-                  <select value={form.vehicle_id} onChange={e => { const v = vehicles.find(x => String(x.vehicle_id)===e.target.value); fld('vehicle_id', e.target.value); if(v) fld('vehicle_name', v.name) }}
-                    style={{ width:'100%', padding:'10px 12px', border:BORDER, borderRadius:9, fontSize:13, color:C.navy, outline:'none', background:'white' }}>
-                    <option value="">—</option>
-                    {vehicles.map(v => <option key={v.vehicle_id} value={String(v.vehicle_id)}>{v.name} — {v.plate}</option>)}
-                  </select>
+                  <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.muted, marginBottom:5 }}>Name / Vehicle (optional)</label>
+                  <input value={form.vehicle_name} onChange={e => fld('vehicle_name', e.target.value)} placeholder="e.g. Motor_1, Office rent…"
+                    style={{ width:'100%', padding:'10px 12px', border:BORDER, borderRadius:9, fontSize:13, color:C.navy, outline:'none', boxSizing:'border-box' }}/>
                 </div>
                 <div>
                   <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.muted, marginBottom:5 }}>Category</label>

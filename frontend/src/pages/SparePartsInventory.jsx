@@ -20,7 +20,7 @@ const BLANK = {
   name:'', part_number:'', category:'Other', unit:'pcs', quantity:'0',
   reorder_level:'0', unit_price:'0', supplier:'', location:'', notes:'',
 }
-const MOVE_BLANK = { movement_type:'in', quantity:'', vehicle_id:'', vehicle_name:'', date:'', reference:'', notes:'' }
+const MOVE_BLANK = { movement_type:'in', quantity:'', vehicle_name:'', date:'', reference:'', notes:'' }
 
 function stockBadge(part) {
   const q = Number(part.quantity), r = Number(part.reorder_level)
@@ -31,7 +31,6 @@ function stockBadge(part) {
 
 export default function SparePartsInventory() {
   const { data:parts, setData:setParts, loading } = useApi(api.spareparts.list)
-  const { data:vehicles }                         = useApi(api.vehicles.list)
 
   const [modal,  setModal]  = useState(null)   // 'add' | 'edit'
   const [form,   setForm]   = useState(BLANK)
@@ -114,11 +113,9 @@ export default function SparePartsInventory() {
     if (!moveForm.quantity || Number(moveForm.quantity) <= 0) { alert('Enter a quantity'); return }
     setMoveSaving(true)
     try {
-      const vName = vehicles.find(v => String(v.vehicle_id) === moveForm.vehicle_id)?.name || moveForm.vehicle_name
       await api.stockMovements.create({
-        ...moveForm, part: moveFor.part_id, vehicle_name: vName,
+        ...moveForm, part: moveFor.part_id,
         quantity: Number(moveForm.quantity),
-        vehicle_id: moveForm.vehicle_id || null,
       })
       const delta = moveForm.movement_type === 'in' ? Number(moveForm.quantity) : -Number(moveForm.quantity)
       setParts(p => p.map(x => x.part_id === moveFor.part_id ? { ...x, quantity: Number(x.quantity) + delta } : x))
@@ -374,12 +371,9 @@ export default function SparePartsInventory() {
 
               {moveForm.movement_type === 'out' && (
                 <div>
-                  <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.muted, marginBottom:5 }}>Used for Vehicle (optional)</label>
-                  <select value={moveForm.vehicle_id} onChange={e => mfld('vehicle_id', e.target.value)}
-                    style={{ width:'100%', padding:'10px 12px', border:BORDER, borderRadius:9, fontSize:13, color:C.navy, outline:'none', background:'white' }}>
-                    <option value="">—</option>
-                    {vehicles.map(v => <option key={v.vehicle_id} value={String(v.vehicle_id)}>{v.name} — {v.plate}</option>)}
-                  </select>
+                  <label style={{ display:'block', fontSize:12, fontWeight:600, color:C.muted, marginBottom:5 }}>Used For (optional)</label>
+                  <input value={moveForm.vehicle_name} onChange={e => mfld('vehicle_name', e.target.value)} placeholder="e.g. Motor_1, Workshop job #4…"
+                    style={{ width:'100%', padding:'10px 12px', border:BORDER, borderRadius:9, fontSize:13, color:C.navy, outline:'none', boxSizing:'border-box' }}/>
                 </div>
               )}
 
