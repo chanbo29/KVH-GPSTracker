@@ -38,6 +38,7 @@ const EN = {
   'nav.users':       'Users',
   'nav.settings':    'Settings',
   'nav.sms':         'SMS',
+  'nav.menu':        'Menu',
 
   // Sidebar chrome
   'sidebar.subtitle':       'GPS Fleet Management System',
@@ -46,6 +47,12 @@ const EN = {
   'sidebar.section.operations': 'Operations',
   'sidebar.section.admin':      'Admin',
   'sidebar.section.more':       'More',
+
+  'menu.subtitle':          'Quick launcher for every section of the app',
+  'menu.section.fleet':        'Fleet Management',
+  'menu.section.operations':   'Operations',
+  'menu.section.maintenance':  'Maintenance & Fuel',
+  'menu.section.admin':        'Administration',
   'sidebar.collapse': 'Collapse sidebar',
   'sidebar.expand':   'Expand sidebar',
   'sidebar.signOut':  'Sign Out',
@@ -166,6 +173,7 @@ const KM = {
   'nav.users':       'អ្នកប្រើប្រាស់',
   'nav.settings':    'ការកំណត់',
   'nav.sms':         'សារ SMS',
+  'nav.menu':        'ម៉ឺនុយ',
 
   'sidebar.subtitle':       'ប្រព័ន្ធគ្រប់គ្រងយានយន្ត GPS',
   'sidebar.section.overview':   'ទិដ្ឋភាពទូទៅ',
@@ -173,6 +181,12 @@ const KM = {
   'sidebar.section.operations': 'ប្រតិបត្តិការ',
   'sidebar.section.admin':      'អ្នកគ្រប់គ្រង',
   'sidebar.section.more':       'ផ្សេងៗ',
+
+  'menu.subtitle':          'ផ្លូវកាត់ទៅគ្រប់ផ្នែកនៃកម្មវិធី',
+  'menu.section.fleet':        'ការគ្រប់គ្រងយានយន្ត',
+  'menu.section.operations':   'ប្រតិបត្តិការ',
+  'menu.section.maintenance':  'ការថែទាំ និងប្រេងឥន្ធនៈ',
+  'menu.section.admin':        'ការគ្រប់គ្រងប្រព័ន្ធ',
   'sidebar.collapse': 'បង្រួមផ្ទាំងចំហៀង',
   'sidebar.expand':   'ពង្រីកផ្ទាំងចំហៀង',
   'sidebar.signOut':  'ចាកចេញ',

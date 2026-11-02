@@ -23,6 +23,7 @@ import Users        from './pages/Users.jsx'
 import Settings     from './pages/Settings.jsx'
 import Maintenance  from './pages/Maintenance.jsx'
 import FuelTracking from './pages/FuelTracking.jsx'
+import Menu         from './pages/Menu.jsx'
 
 /* ── Admin fallback ──────────────────────────────────────────── */
 const ADMIN_USER = {
@@ -35,7 +36,7 @@ const ADMIN_USER = {
   permissions: [
     'dashboard','live','vehicles','history','alerts',
     'geofences','reports','devices','users','settings',
-    'maintenance','fuel',
+    'maintenance','fuel','menu',
   ],
 }
 
@@ -59,6 +60,7 @@ function Page({ id, navigate }) {
     case 'fuel':        return <FuelTracking/>
     case 'users':       return <Users/>
     case 'settings':    return <Settings/>
+    case 'menu':        return <Menu navigate={navigate}/>
     default:            return <Dashboard/>
   }
 }

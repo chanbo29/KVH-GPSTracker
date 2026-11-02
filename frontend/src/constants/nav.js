@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Map, Car, Clock, AlertTriangle,
   User, Hexagon, FileText, Cpu, Users, Settings,
-  Wrench, Droplets,
+  Wrench, Droplets, LayoutGrid,
 } from 'lucide-react'
 
 export const NAV = [
@@ -18,6 +18,7 @@ export const NAV = [
   { id:'fuel',        label:'Fuel Log',           Icon:Droplets        },
   { id:'users',       label:'Users',              Icon:Users           },
   { id:'settings',    label:'Settings',           Icon:Settings        },
+  { id:'menu',        label:'Menu',               Icon:LayoutGrid      },
 ]
 
 export const PAGE_TITLES = {
@@ -34,4 +35,5 @@ export const PAGE_TITLES = {
   fuel:        'Fuel Log',
   users:       'Users',
   settings:    'Settings',
+  menu:        'Menu',
 }
