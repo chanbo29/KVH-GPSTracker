@@ -53,11 +53,9 @@ const EN = {
   'sidebar.section.more':       'More',
 
   'menu.subtitle':          'Quick launcher for every section of the app',
-  'menu.section.fleet':        'Fleet Management',
-  'menu.section.operations':   'Operations',
-  'menu.section.maintenance':  'Maintenance & Fuel',
+  'menu.section.carMaintenance': 'Car Maintenance',
   'menu.section.admin':        'Administration',
-  'menu.section.inventory':    'Spare Parts & Expenses',
+  'menu.section.inventory':    'Spare Parts Inventory',
 
   'menu.tile.liveTracking':      'Live Tracking',
   'menu.tile.addVehicle':        'Add Vehicle',
@@ -208,11 +206,9 @@ const KM = {
   'sidebar.section.more':       'ផ្សេងៗ',
 
   'menu.subtitle':          'ផ្លូវកាត់ទៅគ្រប់ផ្នែកនៃកម្មវិធី',
-  'menu.section.fleet':        'ការគ្រប់គ្រងយានយន្ត',
-  'menu.section.operations':   'ប្រតិបត្តិការ',
-  'menu.section.maintenance':  'ការថែទាំ និងប្រេងឥន្ធនៈ',
+  'menu.section.carMaintenance': 'ការថែទាំរថយន្ត',
   'menu.section.admin':        'ការគ្រប់គ្រងប្រព័ន្ធ',
-  'menu.section.inventory':    'គ្រឿងបន្លាស់ និងចំណាយ',
+  'menu.section.inventory':    'ស្តុកគ្រឿងបន្លាស់',
 
   'menu.tile.liveTracking':      'តាមដានផ្ទាល់',
   'menu.tile.addVehicle':        'បញ្ចូលយានយន្ត',

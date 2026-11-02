@@ -17,32 +17,25 @@ import {
    underlying page still powers both shortcuts. */
 const GROUPS = [
   {
-    titleKey: 'menu.section.fleet',
+    /* One unified grid, like the reference app's unlabeled main menu --
+       everything related to running and maintaining the fleet lives here,
+       no Fleet Management / Operations split. */
+    titleKey: 'menu.section.carMaintenance',
     tiles: [
-      { page: 'live',      labelKey: 'menu.tile.liveTracking', Icon: Map,     color: C.accent, bg: C.accentL },
-      { page: 'vehicles',  addKey: 'vehicles', labelKey: 'menu.tile.addVehicle',  Icon: Plus, color: C.green,  bg: C.greenL },
-      { page: 'vehicles',  labelKey: 'menu.tile.vehicleList',                     Icon: List, color: C.green,  bg: C.greenL },
-      { page: 'drivers',   addKey: 'drivers',  labelKey: 'menu.tile.addDriver',   Icon: Plus, color: C.blue,   bg: C.blueL  },
-      { page: 'drivers',   labelKey: 'menu.tile.driverList',                      Icon: List, color: C.blue,   bg: C.blueL  },
-      { page: 'devices',   labelKey: 'nav.devices',   Icon: Cpu,     color: C.mid,    bg: '#F8FAFC' },
-      { page: 'geofences', labelKey: 'nav.geofences', Icon: Hexagon, color: C.purple, bg: C.purpleL },
-    ],
-  },
-  {
-    titleKey: 'menu.section.operations',
-    tiles: [
-      { page: 'history', labelKey: 'nav.history', Icon: Clock,         color: C.accent, bg: C.accentL },
-      { page: 'alerts',  labelKey: 'nav.alerts',  Icon: AlertTriangle, color: C.red,    bg: C.redL    },
-      { page: 'reports', labelKey: 'nav.reports', Icon: FileText,      color: C.mid,    bg: '#F8FAFC' },
-    ],
-  },
-  {
-    titleKey: 'menu.section.maintenance',
-    tiles: [
-      { page: 'maintenance', addKey: 'maintenance', labelKey: 'menu.tile.addMaintenance',     Icon: Plus, color: C.amber, bg: C.amberL },
-      { page: 'maintenance', labelKey: 'menu.tile.maintenanceHistory',                          Icon: List, color: C.amber, bg: C.amberL },
-      { page: 'fuel',        addKey: 'fuel',        labelKey: 'menu.tile.addFuel',               Icon: Plus, color: C.blue,  bg: C.blueL  },
-      { page: 'fuel',        labelKey: 'menu.tile.fuelHistory',                                   Icon: List, color: C.blue,  bg: C.blueL  },
+      { page: 'live',        labelKey: 'menu.tile.liveTracking', Icon: Map,           color: C.accent, bg: C.accentL },
+      { page: 'vehicles',    addKey: 'vehicles',    labelKey: 'menu.tile.addVehicle',       Icon: Plus,  color: C.green,  bg: C.greenL },
+      { page: 'vehicles',    labelKey: 'menu.tile.vehicleList',                              Icon: List,  color: C.green,  bg: C.greenL },
+      { page: 'drivers',     addKey: 'drivers',     labelKey: 'menu.tile.addDriver',         Icon: Plus,  color: C.blue,   bg: C.blueL  },
+      { page: 'drivers',     labelKey: 'menu.tile.driverList',                                Icon: List,  color: C.blue,   bg: C.blueL  },
+      { page: 'maintenance', addKey: 'maintenance', labelKey: 'menu.tile.addMaintenance',    Icon: Plus,  color: C.amber,  bg: C.amberL },
+      { page: 'maintenance', labelKey: 'menu.tile.maintenanceHistory',                         Icon: List,  color: C.amber,  bg: C.amberL },
+      { page: 'fuel',        addKey: 'fuel',        labelKey: 'menu.tile.addFuel',           Icon: Plus,  color: C.blue,   bg: C.blueL  },
+      { page: 'fuel',        labelKey: 'menu.tile.fuelHistory',                                Icon: List,  color: C.blue,   bg: C.blueL  },
+      { page: 'devices',     labelKey: 'nav.devices',   Icon: Cpu,            color: C.mid,    bg: '#F8FAFC' },
+      { page: 'geofences',   labelKey: 'nav.geofences', Icon: Hexagon,        color: C.purple, bg: C.purpleL },
+      { page: 'history',     labelKey: 'nav.history',   Icon: Clock,          color: C.accent, bg: C.accentL },
+      { page: 'alerts',      labelKey: 'nav.alerts',    Icon: AlertTriangle,  color: C.red,    bg: C.redL    },
+      { page: 'reports',     labelKey: 'nav.reports',   Icon: FileText,       color: C.mid,    bg: '#F8FAFC' },
     ],
   },
   {
