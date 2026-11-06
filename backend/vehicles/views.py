@@ -28,6 +28,10 @@ CAMBODIA_TZ = pytz.timezone('Asia/Phnom_Penh')
 def cambodia_now():
     return timezone.now().astimezone(CAMBODIA_TZ).strftime('%Y-%m-%d %H:%M')
 
+# How long a vehicle must hold a low speed before the map marks it
+# 'stopped' instead of 'moving' -- see receive_gps().
+STOP_GRACE_SECONDS = 60
+
 
 # ── Vehicle ───────────────────────────────────────────────────
 class VehicleViewSet(viewsets.ModelViewSet):
@@ -126,13 +130,37 @@ class VehicleViewSet(viewsets.ModelViewSet):
             satellites = d['satellites'],
             timestamp  = timezone.now(),
         )
-        new_status = 'moving' if d['speed'] > 5 else 'stopped'
-        # status_since only moves forward when the status actually changes,
-        # so "stopped for ..." on the frontend measures from the moment the
-        # vehicle actually stopped, not from the last GPS update.
-        update_fields = {'status': new_status, 'battery': d['battery'], 'signal': d['signal']}
-        if vehicle.status != new_status or not vehicle.status_since:
-            update_fields['status_since'] = timezone.now()
+        # A vehicle only flips to 'stopped' after holding a low speed for a
+        # sustained stretch (STOP_GRACE_SECONDS), not on every single slow
+        # ping -- a red light, a sharp turn, or heavy traffic would otherwise
+        # flicker the status between moving/stopped on the map. While within
+        # the grace window the vehicle is still reported as 'moving'; once
+        # the window is cleared, status_since is backdated to the moment the
+        # slow-down actually started, so "stopped for ..." on the frontend is
+        # accurate rather than starting from right now.
+        now = timezone.now()
+        is_slow = d['speed'] <= 5
+        update_fields = {'battery': d['battery'], 'signal': d['signal']}
+
+        if is_slow:
+            if vehicle.status == 'moving':
+                slow_since = vehicle.slow_since or now
+                elapsed = (now - slow_since).total_seconds()
+                if elapsed >= STOP_GRACE_SECONDS:
+                    update_fields['status'] = 'stopped'
+                    update_fields['status_since'] = slow_since
+                    update_fields['slow_since'] = None
+                else:
+                    update_fields['slow_since'] = slow_since
+            else:
+                # already stopped -- stays stopped, status_since untouched
+                update_fields['slow_since'] = None
+        else:
+            if vehicle.status != 'moving':
+                update_fields['status'] = 'moving'
+                update_fields['status_since'] = now
+            update_fields['slow_since'] = None
+
         Vehicle.objects.filter(imei=d['imei']).update(**update_fields)
         return Response({'status': 'ok', 'imei': d['imei']})
 

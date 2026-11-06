@@ -12,6 +12,7 @@ import Modal       from '../components/ui/Modal.jsx'
 import Table       from '../components/ui/Table.jsx'
 import Badge       from '../components/ui/Badge.jsx'
 import PageHeader  from '../components/ui/PageHeader.jsx'
+import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 import {
   LoadingStyles,
   Spinner,
@@ -28,6 +29,7 @@ const PAGE_SECTIONS = [
   { label: 'Overview',   pages: [
     { key:'dashboard',  label:'Dashboard'          },
     { key:'live',       label:'Live Tracking'      },
+    { key:'menu',       label:'Menu'               },
   ]},
   { label: 'Fleet',      pages: [
     { key:'vehicles',   label:'Vehicles'           },
@@ -46,6 +48,32 @@ const PAGE_SECTIONS = [
     { key:'users',      label:'Users'              },
     { key:'settings',   label:'Settings'           },
     { key:'sms',        label:'SMS Config'         },
+  ]},
+  { label: 'Inventory',  pages: [
+    { key:'spareparts', label:'Spare Parts'        },
+    { key:'documents',  label:'Vehicle Documents'  },
+    { key:'expenses',   label:'Expenses'           },
+  ]},
+  { label: 'Car Maintenance', pages: [
+    { key:'cmOtherWork', label:'Task' },
+    { key:'cmVehicleRoster', label:'Vehicle Table' },
+    { key:'cmMaintenanceRecords', label:'Maintenance Table' },
+    { key:'cmReminders', label:'Reminders' },
+    { key:'cmFeePayments', label:'Fee Payment Dates' },
+    { key:'cmTaxPayments', label:'Tax Payment Dates' },
+    { key:'cmOilChanges', label:'Oil Change Dates' },
+    { key:'cmFuelRefills', label:'Fuel Refills' },
+    { key:'cmGearboxOilChanges', label:'Gearbox Oil Changes' },
+    { key:'cmDifferentialOilChanges', label:'Differential Oil Changes' },
+    { key:'cmMiscRepairCosts', label:'Misc Repair Costs' },
+    { key:'cmVehiclesUnderRepair', label:'Vehicles Under Repair' },
+    { key:'cmFuelStations', label:'Fuel Stations' },
+    { key:'cmVehicleUsers', label:'Vehicle Users' },
+    { key:'cmVehicleUserChanges', label:'Vehicle User Changes' },
+    { key:'cmOutstandingInvoices', label:'Outstanding Invoices' },
+    { key:'cmExchangeRates', label:'Exchange Rate' },
+    { key:'cmExpensePersons', label:'Expense / Spenders' },
+    { key:'cmVehicleSettings', label:'Vehicle Table Settings' },
   ]},
 ]
 const ALL_PAGES = PAGE_SECTIONS.flatMap(s => s.pages)
@@ -181,6 +209,8 @@ function GroupedPermissionPicker({ permissions, onToggle, onToggleSection }) {
 }
 
 export default function UsersPage() {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:users, setData:setUsers, loading } = useApi(api.clients.list)
 
   const [tab,        setTab]        = useState('users')
@@ -216,9 +246,9 @@ export default function UsersPage() {
 
   /* ── Save User ────────────────────────────────────────────── */
   const saveUser = async () => {
-    if (!userForm.username || !userForm.email)            { alert('Username and email are required.'); return }
-    if (modal === 'add-user' && !userForm.password)       { alert('Password is required.'); return }
-    if (!userForm.role_id && !userForm.is_admin)          { alert('Please select a role.'); return }
+    if (!userForm.username || !userForm.email)            { toast('Username and email are required.', 'warning'); return }
+    if (modal === 'add-user' && !userForm.password)       { toast('Password is required.', 'warning'); return }
+    if (!userForm.role_id && !userForm.is_admin)          { toast('Please select a role.', 'warning'); return }
     setSaving(true)
     try {
       const selectedRole = roles.find(r => String(r.id) === String(userForm.role_id))
@@ -239,30 +269,33 @@ export default function UsersPage() {
         setUsers(prev => prev.map(u => u.client_id === userForm.client_id ? updated : u))
       }
       setModal(null); setUserForm(INIT_USER)
-    } catch (err) { alert('Error: ' + err.message) }
+      toast('Saved successfully.', 'success')
+    } catch (err) { toast('Error: ' + err.message, 'error') }
     finally { setSaving(false) }
   }
 
   /* ── Save Role ────────────────────────────────────────────── */
   const saveRole = () => {
-    if (!roleForm.name) { alert('Role name is required.'); return }
+    if (!roleForm.name) { toast('Role name is required.', 'warning'); return }
     const updated = editRoleId
       ? roles.map(r => r.id === editRoleId ? { ...r, name: roleForm.name, permissions: roleForm.permissions } : r)
       : [...roles, { id: Date.now(), name: roleForm.name, permissions: roleForm.permissions }]
     setRoles(updated); saveRoles(updated)
     setModal(null); setRoleForm(INIT_ROLE); setEditRoleId(null)
+    toast('Saved successfully.', 'success')
   }
 
-  const delRole = id => {
-    if (!window.confirm('Delete this role?')) return
+  const delRole = async id => {
+    if (!(await confirm('Delete this role?', { danger: true }))) return
     const updated = roles.filter(r => r.id !== id)
     setRoles(updated); saveRoles(updated)
+    toast('Deleted.', 'success')
   }
 
   const delUser = async id => {
-    if (!window.confirm('Delete this user?')) return
-    try { await api.clients.delete(id); setUsers(prev => prev.filter(u => u.client_id !== id)) }
-    catch (err) { alert('Error: ' + err.message) }
+    if (!(await confirm('Delete this user?', { danger: true }))) return
+    try { await api.clients.delete(id); setUsers(prev => prev.filter(u => u.client_id !== id)); toast('Deleted.', 'success') }
+    catch (err) { toast('Error: ' + err.message, 'error') }
   }
 
   const openAddUser  = ()   => { setUserForm(INIT_USER); setShowPass(false); setModal('add-user') }

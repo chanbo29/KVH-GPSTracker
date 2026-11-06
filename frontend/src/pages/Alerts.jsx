@@ -3,17 +3,19 @@ import { AlertTriangle, Check, Clock, Gauge, Bell } from 'lucide-react'
 import { useApi } from '../hooks/useApi.js'
 import { api }    from '../api/client.js'
 import { LoadingStyles, Spinner, LoadingBar, SkeletonRows } from '../components/Loading.jsx'
+import { useToast } from '../components/ui/UIProvider.jsx'
 
 const R='#DC2626', A='#D97706', B='#1B6BB5'
 const ac=t=>t==='Overspeed'?R:t==='Geofence'?A:t==='Offline'?'#94A3B8':B
 const ab=t=>t==='Overspeed'?'#FEF2F2':t==='Geofence'?'#FFFBEB':t==='Offline'?'#F8FAFC':'#EFF6FF'
 
 export default function Alerts() {
+  const toast = useToast()
   const { data:alerts, setData:setAlerts, loading } = useApi(api.alerts.list)
   const [filter, setFilter] = useState('all')
   const unread = alerts.filter(a=>a.status==='unread').length
   const filtered = filter==='all'?alerts:filter==='unread'?alerts.filter(a=>a.status==='unread'):alerts.filter(a=>a.type===filter)
-  const markAll = async()=>{ try{await api.alerts.markAllRead();setAlerts(p=>p.map(a=>({...a,status:'read'})))}catch(e){alert(e.message)} }
+  const markAll = async()=>{ try{await api.alerts.markAllRead();setAlerts(p=>p.map(a=>({...a,status:'read'})))}catch(e){toast(e.message, 'error')} }
 
   return (
     <div style={{ padding:'28px 32px', maxWidth:1400, margin:'0 auto' }}>

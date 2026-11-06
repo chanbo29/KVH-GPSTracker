@@ -9,6 +9,7 @@ import { api }     from '../api/client.js'
 import Card        from '../components/ui/Card.jsx'
 import Btn         from '../components/ui/Btn.jsx'
 import PageHeader  from '../components/ui/PageHeader.jsx'
+import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 import {
   LoadingStyles, Spinner, LoadingBar,
   Skel, SkeletonRows, SavingOverlay,
@@ -30,6 +31,8 @@ function stockBadge(part) {
 }
 
 export default function SparePartsInventory() {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:parts, setData:setParts, loading } = useApi(api.spareparts.list)
 
   const [modal,  setModal]  = useState(null)   // 'add' | 'edit'
@@ -76,7 +79,7 @@ export default function SparePartsInventory() {
   const closeModal = () => { setModal(null); setForm(BLANK); setEditId(null) }
 
   const save = async () => {
-    if (!form.name) { alert('Part name is required'); return }
+    if (!form.name) { toast('Part name is required', 'warning'); return }
     setSaving(true)
     try {
       const payload = {
@@ -85,7 +88,8 @@ export default function SparePartsInventory() {
         reorder_level: Number(form.reorder_level) || 0,
         unit_price: Number(form.unit_price) || 0,
       }
-      if (modal === 'add') {
+      const wasAdd = modal === 'add'
+      if (wasAdd) {
         const r = await api.spareparts.create(payload)
         setParts(p => [r, ...p])
       } else {
@@ -93,14 +97,15 @@ export default function SparePartsInventory() {
         setParts(p => p.map(x => x.part_id === editId ? r : x))
       }
       closeModal()
-    } catch (e) { alert(e.message) }
+      toast(wasAdd ? 'Added successfully.' : 'Updated successfully.', 'success')
+    } catch (e) { toast(e.message, 'error') }
     finally { setSaving(false) }
   }
 
   const del = async id => {
-    if (!window.confirm('Delete this spare part?')) return
-    try { await api.spareparts.delete(id); setParts(p => p.filter(x => x.part_id !== id)) }
-    catch (e) { alert(e.message) }
+    if (!(await confirm('Delete this spare part?', { danger: true }))) return
+    try { await api.spareparts.delete(id); setParts(p => p.filter(x => x.part_id !== id)); toast('Deleted.', 'success') }
+    catch (e) { toast(e.message, 'error') }
   }
 
   const openMove = (part, type) => {
@@ -110,7 +115,7 @@ export default function SparePartsInventory() {
   const closeMove = () => { setMoveFor(null); setMoveForm(MOVE_BLANK) }
 
   const saveMove = async () => {
-    if (!moveForm.quantity || Number(moveForm.quantity) <= 0) { alert('Enter a quantity'); return }
+    if (!moveForm.quantity || Number(moveForm.quantity) <= 0) { toast('Enter a quantity', 'warning'); return }
     setMoveSaving(true)
     try {
       await api.stockMovements.create({
@@ -120,7 +125,8 @@ export default function SparePartsInventory() {
       const delta = moveForm.movement_type === 'in' ? Number(moveForm.quantity) : -Number(moveForm.quantity)
       setParts(p => p.map(x => x.part_id === moveFor.part_id ? { ...x, quantity: Number(x.quantity) + delta } : x))
       closeMove()
-    } catch (e) { alert(e.message) }
+      toast('Saved successfully.', 'success')
+    } catch (e) { toast(e.message, 'error') }
     finally { setMoveSaving(false) }
   }
 

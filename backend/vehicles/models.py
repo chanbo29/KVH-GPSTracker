@@ -9,9 +9,22 @@ class Vehicle(models.Model):
     plate      = models.CharField(max_length=20,  db_column='Plate',  default='')
     brand      = models.CharField(max_length=100, db_column='Brand',  default='')
     model      = models.CharField(max_length=100, db_column='Model',  default='')
+    color      = models.CharField(max_length=40,  db_column='Color',  default='', blank=True)
+    location   = models.CharField(max_length=150, db_column='Location', default='', blank=True)
+    distance_unit = models.CharField(max_length=10, db_column='DistanceUnit', default='Km', blank=True)
+    fuel_type  = models.CharField(max_length=20,  db_column='FuelType', default='Diesel', blank=True)
+    notes      = models.TextField(db_column='Notes', default='', blank=True)
+    photo      = models.TextField(db_column='Photo', null=True, blank=True)  # base64 data-URL, kept small client-side
     owner = models.CharField(max_length=100, db_column='Owner', default='Unassigned', blank=True)
     status     = models.CharField(max_length=20,  db_column='Status', default='parked')
     status_since = models.DateTimeField(null=True, blank=True, db_column='StatusSince')
+    # Scratch bookkeeping for the receive-gps grace-period logic: the moment
+    # speed first dropped to/below the stopped threshold, so a vehicle only
+    # flips to 'stopped' after holding a low speed for a sustained stretch
+    # (e.g. 1 minute) instead of on every single slow GPS ping (red light,
+    # sharp turn, traffic). Cleared once the vehicle is confirmed stopped
+    # or speeds back up.
+    slow_since = models.DateTimeField(null=True, blank=True, db_column='SlowSince')
     battery    = models.SmallIntegerField(default=100, db_column='Battery')
     signal     = models.SmallIntegerField(default=4,   db_column='Signal')
     created_at = models.DateTimeField(auto_now_add=True, db_column='CreatedAt')

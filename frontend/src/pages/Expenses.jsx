@@ -11,6 +11,7 @@ import { api }     from '../api/client.js'
 import Card        from '../components/ui/Card.jsx'
 import Btn         from '../components/ui/Btn.jsx'
 import PageHeader  from '../components/ui/PageHeader.jsx'
+import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 import {
   LoadingStyles, Spinner, LoadingBar,
   SkeletonRows, SavingOverlay,
@@ -33,6 +34,8 @@ const CAT_COLOR = {
 const BLANK = { vehicle_name:'', category:'repair', amount:'', date:'', description:'', receipt_no:'', notes:'' }
 
 export default function Expenses() {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:expenses, setData:setExpenses, loading } = useApi(api.expenses.list)
 
   const [modal,  setModal]  = useState(null)
@@ -83,11 +86,12 @@ export default function Expenses() {
   const closeModal = () => { setModal(null); setForm(BLANK); setEditId(null) }
 
   const save = async () => {
-    if (!form.amount || !form.date) { alert('Amount and date are required'); return }
+    if (!form.amount || !form.date) { toast('Amount and date are required', 'warning'); return }
     setSaving(true)
     try {
       const payload = { ...form, amount: Number(form.amount) }
-      if (modal === 'add') {
+      const wasAdd = modal === 'add'
+      if (wasAdd) {
         const r = await api.expenses.create(payload)
         setExpenses(p => [r, ...p])
       } else {
@@ -95,14 +99,15 @@ export default function Expenses() {
         setExpenses(p => p.map(e => e.expense_id === editId ? r : e))
       }
       closeModal()
-    } catch (e) { alert(e.message) }
+      toast(wasAdd ? 'Added successfully.' : 'Updated successfully.', 'success')
+    } catch (e) { toast(e.message, 'error') }
     finally { setSaving(false) }
   }
 
   const del = async id => {
-    if (!window.confirm('Delete this expense?')) return
-    try { await api.expenses.delete(id); setExpenses(p => p.filter(e => e.expense_id !== id)) }
-    catch (e) { alert(e.message) }
+    if (!(await confirm('Delete this expense?', { danger: true }))) return
+    try { await api.expenses.delete(id); setExpenses(p => p.filter(e => e.expense_id !== id)); toast('Deleted.', 'success') }
+    catch (e) { toast(e.message, 'error') }
   }
 
   const catLabel = c => CATEGORIES.find(([id]) => id===c)?.[1] || c

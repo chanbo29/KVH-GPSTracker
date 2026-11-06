@@ -8,6 +8,7 @@ import { api }     from '../api/client.js'
 import Card        from '../components/ui/Card.jsx'
 import Btn         from '../components/ui/Btn.jsx'
 import PageHeader  from '../components/ui/PageHeader.jsx'
+import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 import {
   LoadingStyles, Spinner, LoadingBar,
   SkeletonRows, SavingOverlay,
@@ -36,6 +37,8 @@ function expiryInfo(doc) {
 }
 
 export default function VehicleDocuments() {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:docs, setData:setDocs, loading } = useApi(api.vehicleDocuments.list)
 
   const [modal,  setModal]  = useState(null)
@@ -78,11 +81,12 @@ export default function VehicleDocuments() {
   const closeModal = () => { setModal(null); setForm(BLANK); setEditId(null) }
 
   const save = async () => {
-    if (!form.vehicle_name || !form.expiry_date) { alert('Name and expiry date are required'); return }
+    if (!form.vehicle_name || !form.expiry_date) { toast('Name and expiry date are required', 'warning'); return }
     setSaving(true)
     try {
       const payload = { ...form, cost: Number(form.cost) || 0 }
-      if (modal === 'add') {
+      const wasAdd = modal === 'add'
+      if (wasAdd) {
         const r = await api.vehicleDocuments.create(payload)
         setDocs(p => [r, ...p])
       } else {
@@ -90,14 +94,15 @@ export default function VehicleDocuments() {
         setDocs(p => p.map(d => d.document_id === editId ? r : d))
       }
       closeModal()
-    } catch (e) { alert(e.message) }
+      toast(wasAdd ? 'Added successfully.' : 'Updated successfully.', 'success')
+    } catch (e) { toast(e.message, 'error') }
     finally { setSaving(false) }
   }
 
   const del = async id => {
-    if (!window.confirm('Delete this document record?')) return
-    try { await api.vehicleDocuments.delete(id); setDocs(p => p.filter(d => d.document_id !== id)) }
-    catch (e) { alert(e.message) }
+    if (!(await confirm('Delete this document record?', { danger: true }))) return
+    try { await api.vehicleDocuments.delete(id); setDocs(p => p.filter(d => d.document_id !== id)); toast('Deleted.', 'success') }
+    catch (e) { toast(e.message, 'error') }
   }
 
   const typeLabel = t => DOC_TYPES.find(([id]) => id === t)?.[1] || t

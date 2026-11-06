@@ -15,6 +15,7 @@ import { api }     from '../api/client.js'
 import Card        from '../components/ui/Card.jsx'
 import Btn         from '../components/ui/Btn.jsx'
 import PageHeader  from '../components/ui/PageHeader.jsx'
+import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 import {
   LoadingStyles, Spinner, LoadingBar,
   Skel, SkeletonRows, SavingOverlay,
@@ -43,6 +44,8 @@ const ChartTip = ({ active, payload, label }) => {
 }
 
 export default function FuelTracking() {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:logs,     setData:setLogs,  loading   } = useApi(api.fuel.list)
   const { data:vehicles                              } = useApi(api.vehicles.list)
 
@@ -132,7 +135,7 @@ export default function FuelTracking() {
   const closeModal = () => { setModal(null); setForm(BLANK); setEditId(null) }
 
   const save = async () => {
-    if (!form.vehicle_id || !form.date || !form.liters) { alert('Vehicle, date, and liters are required'); return }
+    if (!form.vehicle_id || !form.date || !form.liters) { toast('Vehicle, date, and liters are required', 'warning'); return }
     setSaving(true)
     try {
       const vName = vehicles.find(v => String(v.vehicle_id) === form.vehicle_id)?.name || form.vehicle_name
@@ -144,7 +147,8 @@ export default function FuelTracking() {
         total_cost:    Number(form.total_cost)     || 0,
         odometer:      Number(form.odometer)       || 0,
       }
-      if (modal === 'add') {
+      const wasAdd = modal === 'add'
+      if (wasAdd) {
         const r = await api.fuel.create(payload)
         setLogs(p => [r, ...p])
       } else {
@@ -152,14 +156,15 @@ export default function FuelTracking() {
         setLogs(p => p.map(l => l.log_id === editId ? r : l))
       }
       closeModal()
-    } catch (e) { alert(e.message) }
+      toast(wasAdd ? 'Added successfully.' : 'Updated successfully.', 'success')
+    } catch (e) { toast(e.message, 'error') }
     finally { setSaving(false) }
   }
 
   const del = async id => {
-    if (!window.confirm('Delete this fuel record?')) return
-    try { await api.fuel.delete(id); setLogs(p => p.filter(l => l.log_id !== id)) }
-    catch (e) { alert(e.message) }
+    if (!(await confirm('Delete this fuel record?', { danger: true }))) return
+    try { await api.fuel.delete(id); setLogs(p => p.filter(l => l.log_id !== id)); toast('Deleted.', 'success') }
+    catch (e) { toast(e.message, 'error') }
   }
 
   const fmt2 = v => Number(v).toLocaleString('en', { minimumFractionDigits:2, maximumFractionDigits:2 })

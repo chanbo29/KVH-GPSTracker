@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useToast } from './ui/UIProvider.jsx'
 
 const SC = { moving: '#22C55E', stopped: '#F59E0B', parked: '#EF4444' }
 const SB = { moving: '#22C55E18', stopped: '#F59E0B18', parked: '#EF444418' }
@@ -34,6 +35,7 @@ function infoHTML(v) {
 }
 
 export default function MapView({ vehicles, selected, onSelect, screen, onScreenChange }) {
+  const toast   = useToast()
   const mapEl   = useRef(null)
   const gmap    = useRef(null)
   const markers = useRef({})
@@ -87,7 +89,7 @@ export default function MapView({ vehicles, selected, onSelect, screen, onScreen
     const s = document.createElement('script')
     s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&callback=__gpsInit`
     s.async = true; s.defer = true
-    s.onerror = () => alert('⚠️ Invalid API key or Maps API not enabled.')
+    s.onerror = () => toast('Invalid API key or Maps API not enabled.', 'error')
     document.head.appendChild(s)
   }
 

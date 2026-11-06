@@ -1055,7 +1055,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ display:"flex", height:"100vh", overflow:"hidden", fontFamily:"'Inter',system-ui,sans-serif", fontSize:14 }}>
+    <div style={{ display:"flex", height:"100vh", overflow:"hidden", fontFamily:"'Inter','Kantumruy Pro',system-ui,sans-serif", fontSize:14 }}>
       <Sidebar current={page} onNav={setPage} unread={unread} />
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <Header title={TITLES[page]} unread={unread} onAlerts={()=>setPage("alerts")} />

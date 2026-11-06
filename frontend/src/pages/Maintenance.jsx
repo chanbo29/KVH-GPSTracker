@@ -10,6 +10,7 @@ import { api }     from '../api/client.js'
 import Card        from '../components/ui/Card.jsx'
 import Btn         from '../components/ui/Btn.jsx'
 import PageHeader  from '../components/ui/PageHeader.jsx'
+import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 import Badge       from '../components/ui/Badge.jsx'
 import {
   LoadingStyles, Spinner, LoadingBar,
@@ -93,6 +94,7 @@ const parseServiceTypes = str => (str || '').split(',').map(s => s.trim()).filte
 /* Also lets you add a brand-new vehicle inline (name + plate + type only, no    */
 /* GPS device needed) right from this dropdown, for cars that don't use GPS.     */
 function VehiclePicker({ vehicles, value, onChange, onVehicleCreated }) {
+  const toast = useToast()
   const [open,     setOpen]     = useState(false)
   const [search,   setSearch]   = useState('')
   const [adding,   setAdding]   = useState(false)
@@ -122,7 +124,7 @@ function VehiclePicker({ vehicles, value, onChange, onVehicleCreated }) {
   }
 
   const createVehicle = async () => {
-    if (!newV.name.trim() || !newV.plate.trim()) { alert('Vehicle name and plate are required'); return }
+    if (!newV.name.trim() || !newV.plate.trim()) { toast('Vehicle name and plate are required', 'warning'); return }
     setCreating(true)
     try {
       const created = await api.vehicles.create({
@@ -133,7 +135,7 @@ function VehiclePicker({ vehicles, value, onChange, onVehicleCreated }) {
       onVehicleCreated?.(created)
       onChange(created)
       setAdding(false); setOpen(false)
-    } catch (e) { alert(e.message) }
+    } catch (e) { toast(e.message, 'error') }
     finally { setCreating(false) }
   }
 
@@ -244,6 +246,8 @@ function VehiclePicker({ vehicles, value, onChange, onVehicleCreated }) {
 }
 
 export default function Maintenance() {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:logs,      setData:setLogs,     loading    } = useApi(api.maintenance.list)
   const { data:vehicles, setData:setVehicles              } = useApi(api.vehicles.list)
 
@@ -313,8 +317,8 @@ export default function Maintenance() {
 
   /* ── Save ──────────────────────────────────────────────── */
   const save = async () => {
-    if (!form.vehicle_id || !form.date)     { alert('Vehicle and date are required'); return }
-    if (form.service_types.length === 0)    { alert('Select at least one service type'); return }
+    if (!form.vehicle_id || !form.date)     { toast('Vehicle and date are required', 'warning'); return }
+    if (form.service_types.length === 0)    { toast('Select at least one service type', 'warning'); return }
     setSaving(true)
     try {
       const vName = vehicles.find(v => String(v.vehicle_id) === form.vehicle_id)?.name || form.vehicle_name
@@ -328,7 +332,8 @@ export default function Maintenance() {
         next_odometer: Number(form.next_odometer) || null,
         next_date:     form.next_date || null,
       }
-      if (modal === 'add') {
+      const wasAdd = modal === 'add'
+      if (wasAdd) {
         const r = await api.maintenance.create(payload)
         setLogs(p => [r, ...p])
       } else {
@@ -336,14 +341,15 @@ export default function Maintenance() {
         setLogs(p => p.map(l => l.log_id === editId ? r : l))
       }
       closeModal()
-    } catch (e) { alert(e.message) }
+      toast(wasAdd ? 'Added successfully.' : 'Updated successfully.', 'success')
+    } catch (e) { toast(e.message, 'error') }
     finally { setSaving(false) }
   }
 
   const del = async id => {
-    if (!window.confirm('Delete this service record?')) return
-    try { await api.maintenance.delete(id); setLogs(p => p.filter(l => l.log_id !== id)) }
-    catch (e) { alert(e.message) }
+    if (!(await confirm('Delete this service record?', { danger: true }))) return
+    try { await api.maintenance.delete(id); setLogs(p => p.filter(l => l.log_id !== id)); toast('Deleted.', 'success') }
+    catch (e) { toast(e.message, 'error') }
   }
 
   return (

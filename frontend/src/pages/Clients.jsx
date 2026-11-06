@@ -14,6 +14,7 @@ import Badge       from '../components/ui/Badge.jsx'
 import FormInput   from '../components/ui/FormInput.jsx'
 import FormSelect  from '../components/ui/FormSelect.jsx'
 import PageHeader  from '../components/ui/PageHeader.jsx'
+import { useConfirm, useToast } from '../components/ui/UIProvider.jsx'
 
 const ALL_PAGES = [
   { key:'dashboard', label:'Dashboard'          },
@@ -49,6 +50,8 @@ function RoleBadge({ role }) {
 }
 
 export default function Clients() {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:clients, setData:setClients, loading, refresh } = useApi(api.clients.list)
 
   const [search,   setSearch]   = useState('')
@@ -82,11 +85,11 @@ export default function Clients() {
 
   const save = async () => {
     if (!form.name || !form.username || !form.email) {
-      alert('Full name, username and email are required.')
+      toast('Full name, username and email are required.', 'warning')
       return
     }
     if (modal === 'add' && !form.password) {
-      alert('Password is required when creating a new account.')
+      toast('Password is required when creating a new account.', 'warning')
       return
     }
     setSaving(true)
@@ -114,20 +117,22 @@ export default function Clients() {
       }
       setModal(null)
       setForm(INIT)
+      toast('Saved successfully.', 'success')
     } catch (err) {
-      alert('Error: ' + err.message)
+      toast('Error: ' + err.message, 'error')
     } finally {
       setSaving(false)
     }
   }
 
   const del = async id => {
-    if (!window.confirm('Delete this client account? They will no longer be able to login.')) return
+    if (!(await confirm('Delete this client account? They will no longer be able to login.', { danger: true }))) return
     try {
       await api.clients.delete(id)
       setClients(prev => prev.filter(c => c.client_id !== id))
+      toast('Deleted.', 'success')
     } catch (err) {
-      alert('Error: ' + err.message)
+      toast('Error: ' + err.message, 'error')
     }
   }
 

@@ -13,6 +13,7 @@ import { useApi } from '../hooks/useApi.js'
 import { api }    from '../api/client.js'
 import { t }      from '../constants/i18n.js'
 import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
+import { useConfirm, useToast } from './ui/UIProvider.jsx'
 
 const C = {
   bg:     '#F1F5F9',
@@ -830,6 +831,8 @@ function AlertsScreen() {
    DRIVERS
 ════════════════════════════════════════════════════════════ */
 function DriversScreen({ onBack }) {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:drivers, setData:setDrivers, loading } = useApi(api.drivers.list)
   const { data:vehicles } = useApi(api.vehicles.list)
   const [search, setSearch] = useState('')
@@ -873,14 +876,15 @@ function DriversScreen({ onBack }) {
         setDrivers(p=>p.map(d=>d.driver_id===editId ? { ...d, ...form } : d))
       }
       close()
-    } catch(e) { alert(e.message) }
+      toast('Saved successfully.', 'success')
+    } catch(e) { toast(e.message, 'error') }
     finally { setSaving(false) }
   }
 
   const del = async id => {
-    if (!window.confirm(t('mobile.confirmDeleteDriver'))) return
-    try { await api.drivers.delete(id); setDrivers(p=>p.filter(d=>d.driver_id!==id)) }
-    catch(e) { alert(e.message) }
+    if (!(await confirm(t('mobile.confirmDeleteDriver'), { danger: true }))) return
+    try { await api.drivers.delete(id); setDrivers(p=>p.filter(d=>d.driver_id!==id)); toast('Deleted.', 'success') }
+    catch(e) { toast(e.message, 'error') }
   }
 
   return (
@@ -1023,14 +1027,15 @@ function DriversScreen({ onBack }) {
    GPS DEVICES
 ════════════════════════════════════════════════════════════ */
 function DevicesScreen({ onBack }) {
+  const toast = useToast()
   const { data:devices, setData:setDevices, loading } = useApi(api.devices.list)
   const [open,   setOpen]   = useState(false)
   const [form,   setForm]   = useState({ imei:'', model:'GPS', sim_number:'', vehicle:'', protocol:'GT06', gps_status:'offline' })
   const [saving, setSaving] = useState(false)
   const col = s => s==='online'?C.green:s==='offline'?C.faint:C.amber
   const save = async()=>{
-    if(!form.imei||form.imei.length!==15){alert('IMEI must be 15 digits');return}; setSaving(true)
-    try{ const r=await api.devices.create({...form,last_connection:'',last_update:''}); setDevices(p=>[...p,r]); setOpen(false); setForm({imei:'',model:'GPS',sim_number:'',vehicle:'',protocol:'GT06',gps_status:'offline'}) }catch(e){alert(e.message)}finally{setSaving(false)}
+    if(!form.imei||form.imei.length!==15){toast('IMEI must be 15 digits', 'warning');return}; setSaving(true)
+    try{ const r=await api.devices.create({...form,last_connection:'',last_update:''}); setDevices(p=>[...p,r]); setOpen(false); setForm({imei:'',model:'GPS',sim_number:'',vehicle:'',protocol:'GT06',gps_status:'offline'}); toast('Added successfully.', 'success') }catch(e){toast(e.message, 'error')}finally{setSaving(false)}
   }
   const handleSIM=raw=>{ const d=raw.replace(/\D/g,'').slice(0,9); let fmt=d; if(d.length>6)fmt=d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6); else if(d.length>3)fmt=d.slice(0,3)+'-'+d.slice(3); setForm(f=>({...f,sim_number:fmt})) }
   return (
@@ -1109,6 +1114,8 @@ function DevicesScreen({ onBack }) {
    USERS
 ════════════════════════════════════════════════════════════ */
 function UsersScreen({ onBack }) {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:users, setData:setUsers, loading } = useApi(api.clients.list)
   const [search,   setSearch]   = useState('')
   const [open,     setOpen]     = useState(false)
@@ -1119,9 +1126,9 @@ function UsersScreen({ onBack }) {
   const ALL_P = ['dashboard','live','vehicles','history','alerts','geofences','reports','devices','users','settings','maintenance','fuel']
   const save = async()=>{
     if(!form.username||!form.email||!form.password)return; setSaving(true)
-    try{ const r=await api.clients.create({...form,name:form.username.replace(/\b\w/g,c=>c.toUpperCase()),status:'active',permissions:form.role==='admin'?ALL_P:[]}); setUsers(p=>[...p,r]); setOpen(false); setForm({username:'',email:'',password:'',role:'staff'}) }catch(e){alert(e.message)}finally{setSaving(false)}
+    try{ const r=await api.clients.create({...form,name:form.username.replace(/\b\w/g,c=>c.toUpperCase()),status:'active',permissions:form.role==='admin'?ALL_P:[]}); setUsers(p=>[...p,r]); setOpen(false); setForm({username:'',email:'',password:'',role:'staff'}); toast('Added successfully.', 'success') }catch(e){toast(e.message, 'error')}finally{setSaving(false)}
   }
-  const del = async id=>{ if(!window.confirm('Delete user?'))return; try{await api.clients.delete(id);setUsers(p=>p.filter(u=>u.client_id!==id))}catch(e){alert(e.message)} }
+  const del = async id=>{ if(!(await confirm('Delete user?', { danger: true })))return; try{await api.clients.delete(id);setUsers(p=>p.filter(u=>u.client_id!==id));toast('Deleted.', 'success')}catch(e){toast(e.message, 'error')} }
   return (
     <Screen>
       <Bar title={t('nav.users')} onBack={onBack} loading={loading} action={<IconBtn icon={Plus} color="white" bg={C.blue} onClick={()=>setOpen(true)}/>}/>
@@ -1701,6 +1708,8 @@ const MSTATUS = {
 }
 
 function MaintenanceScreen({ onBack }) {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:logs,     setData:setLogs,  loading } = useApi(api.maintenance.list)
   const { data:vehicles                            } = useApi(api.vehicles.list)
   const [tab,    setTab]    = useState('all')
@@ -1714,7 +1723,7 @@ function MaintenanceScreen({ onBack }) {
   const scheduled = logs.filter(l=>l.status==='scheduled').length
 
   const save = async()=>{
-    if(!form.vehicle_id||!form.date){alert('Vehicle and date required');return}
+    if(!form.vehicle_id||!form.date){toast('Vehicle and date required', 'warning');return}
     setSaving(true)
     try{
       const vName=vehicles.find(v=>String(v.vehicle_id)===form.vehicle_id)?.name||''
@@ -1722,10 +1731,11 @@ function MaintenanceScreen({ onBack }) {
       setLogs(p=>[r,...p])
       setOpen(false)
       setForm({vehicle_id:'',vehicle_name:'',service_type:'Oil Change',date:'',odometer:'',cost:'',technician:'',next_date:'',status:'completed'})
-    }catch(e){alert(e.message)}finally{setSaving(false)}
+      toast('Added successfully.', 'success')
+    }catch(e){toast(e.message, 'error')}finally{setSaving(false)}
   }
 
-  const del = async id=>{ if(!window.confirm('Delete?'))return; try{await api.maintenance.delete(id);setLogs(p=>p.filter(l=>l.log_id!==id))}catch(e){alert(e.message)} }
+  const del = async id=>{ if(!(await confirm('Delete this record?', { danger: true })))return; try{await api.maintenance.delete(id);setLogs(p=>p.filter(l=>l.log_id!==id));toast('Deleted.', 'success')}catch(e){toast(e.message, 'error')} }
 
   return (
     <Screen>
@@ -1844,6 +1854,8 @@ function MaintenanceScreen({ onBack }) {
    FUEL TRACKING
 ════════════════════════════════════════════════════════════ */
 function FuelScreen({ onBack }) {
+  const confirm = useConfirm()
+  const toast   = useToast()
   const { data:logs,     setData:setLogs,  loading } = useApi(api.fuel.list)
   const { data:vehicles                            } = useApi(api.vehicles.list)
   const [open,   setOpen]   = useState(false)
@@ -1866,7 +1878,7 @@ function FuelScreen({ onBack }) {
   const avgC      = withDist.length ? withDist.reduce((s,l)=>s+(Number(l.liters)/l.distance_since_last*100),0)/withDist.length : 0
 
   const save = async()=>{
-    if(!form.vehicle_id||!form.date||!form.liters){alert('Vehicle, date and liters required');return}
+    if(!form.vehicle_id||!form.date||!form.liters){toast('Vehicle, date and liters required', 'warning');return}
     setSaving(true)
     try{
       const vName=vehicles.find(v=>String(v.vehicle_id)===form.vehicle_id)?.name||''
@@ -1874,10 +1886,11 @@ function FuelScreen({ onBack }) {
       setLogs(p=>[r,...p])
       setOpen(false)
       setForm({vehicle_id:'',vehicle_name:'',date:'',liters:'',cost_per_liter:'',total_cost:'',odometer:'',fuel_type:'Gasoline',station:'',full_tank:true})
-    }catch(e){alert(e.message)}finally{setSaving(false)}
+      toast('Added successfully.', 'success')
+    }catch(e){toast(e.message, 'error')}finally{setSaving(false)}
   }
 
-  const del = async id=>{ if(!window.confirm('Delete?'))return; try{await api.fuel.delete(id);setLogs(p=>p.filter(l=>l.log_id!==id))}catch(e){alert(e.message)} }
+  const del = async id=>{ if(!(await confirm('Delete this record?', { danger: true })))return; try{await api.fuel.delete(id);setLogs(p=>p.filter(l=>l.log_id!==id));toast('Deleted.', 'success')}catch(e){toast(e.message, 'error')} }
 
   return (
     <Screen>
@@ -2089,7 +2102,7 @@ export default function MobileApp({ user, onLogout, lang, onToggleLanguage }) {
   }
 
   return (
-    <div style={{ position:'fixed', inset:0, background:C.bg, fontFamily:"'Inter',system-ui,-apple-system,sans-serif", display:'flex', flexDirection:'column', overflow:'hidden', paddingTop:'env(safe-area-inset-top)' }}>
+    <div style={{ position:'fixed', inset:0, background:C.bg, fontFamily:"'Inter','Kantumruy Pro',system-ui,-apple-system,sans-serif", display:'flex', flexDirection:'column', overflow:'hidden', paddingTop:'env(safe-area-inset-top)' }}>
       {renderPage()}
       <Nav active={page} onNav={setPage} unread={unread}/>
     </div>
