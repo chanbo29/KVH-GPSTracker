@@ -1,5 +1,6 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; width: 100%; overflow: hidden; }
+body { font-family: 'Inter', 'Kantumruy Pro', system-ui, -apple-system, sans-serif; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }

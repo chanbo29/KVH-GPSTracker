@@ -27,6 +27,25 @@ import Menu         from './pages/Menu.jsx'
 import SparePartsInventory from './pages/SparePartsInventory.jsx'
 import VehicleDocuments    from './pages/VehicleDocuments.jsx'
 import Expenses            from './pages/Expenses.jsx'
+import CmOtherWork from './pages/carmaint/CmOtherWork.jsx'
+import CmVehicleRoster from './pages/carmaint/CmVehicleRoster.jsx'
+import CmMaintenanceRecords from './pages/carmaint/CmMaintenanceRecords.jsx'
+import CmReminders from './pages/carmaint/CmReminders.jsx'
+import CmFeePayments from './pages/carmaint/CmFeePayments.jsx'
+import CmTaxPayments from './pages/carmaint/CmTaxPayments.jsx'
+import CmOilChanges from './pages/carmaint/CmOilChanges.jsx'
+import CmFuelRefills from './pages/carmaint/CmFuelRefills.jsx'
+import CmGearboxOilChanges from './pages/carmaint/CmGearboxOilChanges.jsx'
+import CmDifferentialOilChanges from './pages/carmaint/CmDifferentialOilChanges.jsx'
+import CmMiscRepairCosts from './pages/carmaint/CmMiscRepairCosts.jsx'
+import CmVehiclesUnderRepair from './pages/carmaint/CmVehiclesUnderRepair.jsx'
+import CmFuelStations from './pages/carmaint/CmFuelStations.jsx'
+import CmVehicleUsers from './pages/carmaint/CmVehicleUsers.jsx'
+import CmVehicleUserChanges from './pages/carmaint/CmVehicleUserChanges.jsx'
+import CmOutstandingInvoices from './pages/carmaint/CmOutstandingInvoices.jsx'
+import CmExchangeRates from './pages/carmaint/CmExchangeRates.jsx'
+import CmExpensePersons from './pages/carmaint/CmExpensePersons.jsx'
+import CmVehicleSettings from './pages/carmaint/CmVehicleSettings.jsx'
 
 /* ── Admin fallback ──────────────────────────────────────────── */
 const ADMIN_USER = {
@@ -40,8 +59,22 @@ const ADMIN_USER = {
     'dashboard','live','vehicles','history','alerts',
     'geofences','reports','devices','users','settings',
     'maintenance','fuel','menu','spareparts','documents','expenses',
+    'cmOtherWork','cmVehicleRoster','cmMaintenanceRecords','cmReminders','cmFeePayments','cmTaxPayments','cmOilChanges','cmFuelRefills','cmGearboxOilChanges','cmDifferentialOilChanges','cmMiscRepairCosts','cmVehiclesUnderRepair','cmFuelStations','cmVehicleUsers','cmVehicleUserChanges','cmOutstandingInvoices','cmExchangeRates','cmExpensePersons','cmVehicleSettings',
   ],
 }
+
+// Pages that render full-screen (no Sidebar/Header) with their own
+// back-to-Menu button: every page built on the generic CarMaintPage.jsx
+// template, plus CmVehicleRoster (its own bespoke layout, but now
+// manages its own scroll + back button the same way). CmVehicleSettings
+// is the one Car Maintenance page that still keeps the normal app chrome.
+const CARMAINT_TEMPLATE_PAGES = [
+  'cmOtherWork','cmMaintenanceRecords','cmReminders','cmFeePayments','cmTaxPayments',
+  'cmOilChanges','cmFuelRefills','cmGearboxOilChanges','cmDifferentialOilChanges',
+  'cmMiscRepairCosts','cmVehiclesUnderRepair','cmFuelStations','cmVehicleUsers',
+  'cmVehicleUserChanges','cmOutstandingInvoices','cmExchangeRates','cmExpensePersons',
+  'cmVehicleRoster',
+]
 
 const canAccess   = (user, id) => !user ? false : user.role === 'admin' ? true : Array.isArray(user.permissions) && user.permissions.includes(id)
 const firstPage   = (user) => NAV.find(({ id }) => canAccess(user, id))?.id ?? 'dashboard'
@@ -67,6 +100,25 @@ function Page({ id, navigate }) {
     case 'spareparts':  return <SparePartsInventory/>
     case 'documents':   return <VehicleDocuments/>
     case 'expenses':    return <Expenses/>
+    case 'cmOtherWork': return <CmOtherWork navigate={navigate}/>
+    case 'cmVehicleRoster': return <CmVehicleRoster navigate={navigate}/>
+    case 'cmMaintenanceRecords': return <CmMaintenanceRecords navigate={navigate}/>
+    case 'cmReminders': return <CmReminders navigate={navigate}/>
+    case 'cmFeePayments': return <CmFeePayments navigate={navigate}/>
+    case 'cmTaxPayments': return <CmTaxPayments navigate={navigate}/>
+    case 'cmOilChanges': return <CmOilChanges navigate={navigate}/>
+    case 'cmFuelRefills': return <CmFuelRefills navigate={navigate}/>
+    case 'cmGearboxOilChanges': return <CmGearboxOilChanges navigate={navigate}/>
+    case 'cmDifferentialOilChanges': return <CmDifferentialOilChanges navigate={navigate}/>
+    case 'cmMiscRepairCosts': return <CmMiscRepairCosts navigate={navigate}/>
+    case 'cmVehiclesUnderRepair': return <CmVehiclesUnderRepair navigate={navigate}/>
+    case 'cmFuelStations': return <CmFuelStations navigate={navigate}/>
+    case 'cmVehicleUsers': return <CmVehicleUsers navigate={navigate}/>
+    case 'cmVehicleUserChanges': return <CmVehicleUserChanges navigate={navigate}/>
+    case 'cmOutstandingInvoices': return <CmOutstandingInvoices navigate={navigate}/>
+    case 'cmExchangeRates': return <CmExchangeRates navigate={navigate}/>
+    case 'cmExpensePersons': return <CmExpensePersons navigate={navigate}/>
+    case 'cmVehicleSettings': return <CmVehicleSettings navigate={navigate}/>
     default:            return <Dashboard/>
   }
 }
@@ -230,10 +282,24 @@ export default function App() {
   /* Desktop */
   const visibleNav = NAV.filter(({ id }) => canAccess(user, id))
   const safePage   = canAccess(user, page) ? page : firstPage(user)
+  const fullScreen  = CARMAINT_TEMPLATE_PAGES.includes(safePage)
+
+  if (fullScreen) {
+    // Car Maintenance template pages manage their own scroll container
+    // and their own back-to-Menu icon (see CarMaintPage.jsx), so no
+    // Sidebar/Header and no shared mainRef here.
+    return (
+      <UIProvider>
+        <div style={{ height:'100vh', overflow:'hidden', background:C.bg, fontFamily:"'Inter','Kantumruy Pro',system-ui,-apple-system,sans-serif" }}>
+          <Page id={safePage} navigate={navigate}/>
+        </div>
+      </UIProvider>
+    )
+  }
 
   return (
     <UIProvider>
-      <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:"'Inter',system-ui,-apple-system,sans-serif" }}>
+      <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:C.bg, fontFamily:"'Inter','Kantumruy Pro',system-ui,-apple-system,sans-serif" }}>
         <Sidebar nav={visibleNav} active={safePage} onNav={navigate} user={user} onLogout={handleLogout}/>
         <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', minWidth:0 }}>
           <Header page={safePage} user={user} onLogout={handleLogout} lang={lang} onToggleLanguage={toggleLanguage}/>

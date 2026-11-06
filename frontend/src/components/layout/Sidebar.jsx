@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { C } from '../../constants/colors.js'
 import { NAV } from '../../constants/nav.js'
@@ -47,6 +47,17 @@ export default function Sidebar({ current, active, onNav, unread = 0, user }) {
   const currentPage = current ?? active   // accepts either prop name, in case App.jsx passes 'active'
   const [collapsed, setCollapsed] = useState(false)
   const [mounted,   setMounted]   = useState(false)
+
+  // Auto-collapse the sidebar only when navigating AWAY FROM the Menu page
+  // (e.g. tapping any tile there) — ordinary Sidebar navigation elsewhere
+  // doesn't trigger this.
+  const prevPage = useRef(currentPage)
+  useEffect(() => {
+    if (prevPage.current === 'menu' && currentPage !== 'menu') {
+      setCollapsed(true)
+    }
+    prevPage.current = currentPage
+  }, [currentPage])
 
   // Single floating tooltip, positioned with real screen coordinates (position: fixed)
   // so it always shows fully — never clipped by the sidebar's own overflow:hidden.

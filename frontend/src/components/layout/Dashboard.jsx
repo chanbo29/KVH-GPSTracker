@@ -65,7 +65,7 @@ export default function Dashboard() {
     type === 'Offline'   ? '#64748B' : '#1B6BB5'
 
   return (
-    <div style={{ padding:'24px 28px', minHeight:'100%', background:'#F6F8FB', fontFamily:"'Inter',system-ui,sans-serif" }}>
+    <div style={{ padding:'24px 28px', minHeight:'100%', background:'#F6F8FB', fontFamily:"'Inter','Kantumruy Pro',system-ui,sans-serif" }}>
       <style>{`
         @keyframes ping { 0%,100%{transform:scale(1);opacity:.4} 50%{transform:scale(1.8);opacity:0} }
         @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }

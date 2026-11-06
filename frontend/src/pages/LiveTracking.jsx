@@ -533,7 +533,7 @@ export default function LiveTracking() {
   }
 
   return (
-    <div style={{ position:'relative', width:'100%', height:'100%', fontFamily:"'Inter',system-ui,-apple-system,sans-serif", overflow:'hidden', display:'flex' }}>
+    <div style={{ position:'relative', width:'100%', height:'100%', fontFamily:"'Inter','Kantumruy Pro',system-ui,-apple-system,sans-serif", overflow:'hidden', display:'flex' }}>
       <style>{`
         @keyframes kvhP    { 0%{transform:scale(.4);opacity:.8} 100%{transform:scale(2.6);opacity:0} }
         @keyframes kvhSpin { to{transform:rotate(360deg)} }
@@ -558,7 +558,7 @@ export default function LiveTracking() {
         }
         .kvh-bubble {
           position:relative;
-          font-family:'Inter',system-ui,-apple-system,sans-serif;
+          font-family:'Inter','Kantumruy Pro',system-ui,-apple-system,sans-serif;
           min-width:128px;
           background:#fff;
           border-radius:10px;

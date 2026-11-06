@@ -20,7 +20,9 @@ class VehicleSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Vehicle
         fields = ['vehicle_id', 'imei', 'name', 'type', 'plate',
-                  'brand', 'model', 'owner', 'status', 'battery', 'signal',
+                  'brand', 'model', 'color', 'location', 'distance_unit',
+                  'fuel_type', 'notes', 'photo',
+                  'owner', 'status', 'battery', 'signal',
                   'lat', 'lng', 'speed', 'last_update', 'status_since',
                   'created_at', 'updated_at']
         read_only_fields = ['vehicle_id', 'created_at', 'updated_at',
@@ -29,6 +31,12 @@ class VehicleSerializer(serializers.ModelSerializer):
             'imei':    { 'required': False, 'allow_null': True, 'allow_blank': True, 'default': None },
             'brand':   { 'required': False, 'default': '',            'allow_blank': True },
             'model':   { 'required': False, 'default': '',            'allow_blank': True },
+            'color':   { 'required': False, 'default': '',            'allow_blank': True },
+            'location':{ 'required': False, 'default': '',            'allow_blank': True },
+            'distance_unit': { 'required': False, 'default': 'Km',    'allow_blank': True },
+            'fuel_type':     { 'required': False, 'default': 'Diesel','allow_blank': True },
+            'notes':   { 'required': False, 'default': '',            'allow_blank': True },
+            'photo':   { 'required': False, 'allow_null': True,       'allow_blank': True, 'default': None },
             'owner':   { 'required': False, 'default': 'Unassigned',  'allow_blank': True },
             'battery': { 'required': False, 'default': 100     },
             'signal':  { 'required': False, 'default': 4       },

@@ -277,7 +277,7 @@ export default function Drivers() {
   const isEdit = modal === 'edit'
 
   return (
-    <div style={{ padding:'28px 32px', maxWidth:1400, margin:'0 auto', fontFamily:"'Inter',system-ui,sans-serif" }}>
+    <div style={{ padding:'28px 32px', maxWidth:1400, margin:'0 auto', fontFamily:"'Inter','Kantumruy Pro',system-ui,sans-serif" }}>
       <LoadingStyles/>
 
       {/* ── Header ─────────────────────────────────────── */}
