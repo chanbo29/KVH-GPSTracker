@@ -1,6 +1,15 @@
 import json
+import datetime
+from django.utils import timezone
 from rest_framework import serializers
 from .models import Vehicle, GPSLog, Driver, Alert, GPSDevice, Client, Geofence
+
+# A vehicle with no GPS ping in this long is reported as 'offline' to the
+# frontend regardless of whatever moving/stopped value is stored on it --
+# that stored value only reflects the last ping it DID send, so without a
+# freshness check a device that lost power mid-drive would show as
+# permanently 'moving' forever.
+OFFLINE_TIMEOUT_MINUTES = 10
 
 
 class GPSLogSerializer(serializers.ModelSerializer):
@@ -16,17 +25,18 @@ class VehicleSerializer(serializers.ModelSerializer):
     speed       = serializers.SerializerMethodField()
     last_update = serializers.SerializerMethodField()
     status_since = serializers.SerializerMethodField()
+    live_status = serializers.SerializerMethodField()
 
     class Meta:
         model  = Vehicle
         fields = ['vehicle_id', 'imei', 'name', 'type', 'plate',
                   'brand', 'model', 'color', 'location', 'distance_unit',
                   'fuel_type', 'notes', 'photo',
-                  'owner', 'status', 'battery', 'signal',
+                  'owner', 'status', 'live_status', 'battery', 'signal',
                   'lat', 'lng', 'speed', 'last_update', 'status_since',
                   'created_at', 'updated_at']
         read_only_fields = ['vehicle_id', 'created_at', 'updated_at',
-                            'lat', 'lng', 'speed', 'last_update', 'status_since']
+                            'lat', 'lng', 'speed', 'last_update', 'status_since', 'live_status']
         extra_kwargs = {
             'imei':    { 'required': False, 'allow_null': True, 'allow_blank': True, 'default': None },
             'brand':   { 'required': False, 'default': '',            'allow_blank': True },
@@ -69,6 +79,17 @@ class VehicleSerializer(serializers.ModelSerializer):
 
     def get_status_since(self, obj):
         return obj.status_since.isoformat() if obj.status_since else None
+
+    def get_live_status(self, obj):
+        # Authoritative status for display: 'offline' overrides whatever
+        # moving/stopped value is stored, if nothing has been heard from
+        # this vehicle's GPS device recently.
+        log = obj.latest_log
+        if not log:
+            return 'offline'
+        if timezone.now() - log.timestamp > datetime.timedelta(minutes=OFFLINE_TIMEOUT_MINUTES):
+            return 'offline'
+        return obj.status
 
 
 class ReceiveGPSSerializer(serializers.Serializer):

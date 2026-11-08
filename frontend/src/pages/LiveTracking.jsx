@@ -27,11 +27,31 @@ const T = {
 }
 
 const STATUS = {
-  moving:  { color:T.green, bg:T.greenL, dot:'#22C55E', label:'Moving'  },
-  stopped: { color:T.amber, bg:T.amberL, dot:'#F59E0B', label:'Stopped' },
-  offline: { color:T.grey,  bg:T.greyL,  dot:'#CBD5E1', label:'Offline' },
+  moving:      { color:T.green, bg:T.greenL, dot:'#22C55E', label:'Moving'      },
+  stopped:     { color:T.amber, bg:T.amberL, dot:'#F59E0B', label:'Stopped'     },
+  stopped_long:{ color:T.red,   bg:'#FEE2E2', dot:'#EF4444', label:'Stopped 24h+' },
+  offline:     { color:T.grey,  bg:T.greyL,  dot:'#CBD5E1', label:'Offline'     },
 }
 const st = s => STATUS[s] || STATUS.offline
+
+// How long a "stopped" vehicle has to have held that status before its
+// color escalates from yellow to red -- a quick roadside stop looks very
+// different from a vehicle that's been sitting for over a day.
+const STOPPED_LONG_HOURS = 24
+
+// The single color-coded status key every part of this page uses for
+// display: green while actually moving, grey the moment the backend has no
+// recent ping (live_status, computed server-side from GPS freshness --
+// falls back to the raw `status` field for any older API response that
+// doesn't have it yet), amber for a recent stop, escalating to red once
+// that stop has lasted STOPPED_LONG_HOURS or more.
+function dispStatus(v) {
+  const live = v.live_status || v.status
+  if (live === 'offline') return 'offline'
+  if (live === 'moving')  return 'moving'
+  const ms = v.status_since ? Date.now() - new Date(v.status_since).getTime() : 0
+  return (isFinite(ms) && ms >= STOPPED_LONG_HOURS * 3600000) ? 'stopped_long' : 'stopped'
+}
 
 // "Stopped 23m" / "Stopped 1h 12m" / "Stopped 2d 4h" — how long the vehicle
 // has held its current status, from Vehicle.status_since.
@@ -87,11 +107,12 @@ function mkIcon(status, course = 0) {
 // — it deliberately does NOT use google.maps.InfoWindow, whose fixed white
 // chrome and oversized default close button can't be restyled away.
 function mkInfoHtml(v) {
-  const s = st(v.status)
+  const ds = dispStatus(v)
+  const s = st(ds)
   const title = (v.owner && v.owner !== 'Unassigned') ? v.owner : (v.name || 'Vehicle')
   // Only stopped/offline vehicles get a duration; a moving vehicle shows its
   // live speed instead — whichever is the one number that matters right now.
-  const info = v.status === 'moving'
+  const info = ds === 'moving'
     ? `${Math.round(v.speed || 0)} km/h`
     : sinceLabel(v.status_since)
   // Small, two-line card: name + status pill, then plate + the one live
@@ -101,7 +122,7 @@ function mkInfoHtml(v) {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
         <span style="font-weight:800;font-size:12px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${title}">${title}</span>
         <span style="display:flex;align-items:center;gap:4px;background:${s.bg};padding:2px 6px;border-radius:20px;flex-shrink:0">
-          <span class="${v.status==='moving'?'kvh-dot-live':''}" style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
+          <span class="${ds==='moving'?'kvh-dot-live':''}" style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
           <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>
         </span>
       </div>
@@ -362,8 +383,8 @@ export default function LiveTracking() {
     data.forEach(v => {
       const lat = parseFloat(v.lat||0), lng = parseFloat(v.lng||0)
       if (!lat && !lng) return
-      const isMoving = v.status === 'moving'
-      const icon     = mkIcon(v.status, v.course||0)
+      const isMoving = dispStatus(v) === 'moving'
+      const icon     = mkIcon(dispStatus(v), v.course||0)
       if (markers.current[v.imei]) {
         animateMarker(markers.current[v.imei], lat, lng)
         markers.current[v.imei].setIcon(icon)
@@ -380,7 +401,7 @@ export default function LiveTracking() {
         // Custom floating label, shown automatically as soon as the marker
         // exists — no click needed — gliding smoothly with the pin.
         const LabelCls = getVehicleLabelClass()
-        infoWins.current[v.imei] = new LabelCls(gmap.current, { lat, lng }, mkInfoHtml(v), st(v.status).color)
+        infoWins.current[v.imei] = new LabelCls(gmap.current, { lat, lng }, mkInfoHtml(v), st(dispStatus(v)).color)
       }
       // Keep the always-visible label in sync with live position/data
       if (infoWins.current[v.imei]) {
@@ -460,16 +481,18 @@ export default function LiveTracking() {
     gmap.current.fitBounds(bounds, { top:60, right:60, bottom:60, left:open?60:60 })
   }
 
-  const list    = vehicles.filter(v=>(filter==='all'||v.status===filter)&&(!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.toLowerCase().includes(search.toLowerCase())||v.owner?.toLowerCase().includes(search.toLowerCase())))
-  const moving  = vehicles.filter(v=>v.status==='moving').length
-  const stopped = vehicles.filter(v=>v.status==='stopped').length
-  const offline = vehicles.filter(v=>v.status==='offline').length
+  const list        = vehicles.filter(v=>(filter==='all'||dispStatus(v)===filter)&&(!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.toLowerCase().includes(search.toLowerCase())||v.owner?.toLowerCase().includes(search.toLowerCase())))
+  const moving      = vehicles.filter(v=>dispStatus(v)==='moving').length
+  const stopped     = vehicles.filter(v=>dispStatus(v)==='stopped').length
+  const stoppedLong = vehicles.filter(v=>dispStatus(v)==='stopped_long').length
+  const offline     = vehicles.filter(v=>dispStatus(v)==='offline').length
 
   // One vehicle-list row — shared by the flat list (a status filter is
   // active) and the grouped view (Moving/Stopped/Offline sections, shown
   // when filter is "All" so a busy fleet is easier to scan at a glance).
   const renderRow = v => {
-    const s    = st(v.status)
+    const ds   = dispStatus(v)
+    const s    = st(ds)
     const isSel= selected?.imei === v.imei
     const hasDriver = v.owner && v.owner !== 'Unassigned'
     return (
@@ -521,7 +544,7 @@ export default function LiveTracking() {
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10, paddingTop:8, borderTop:'1px solid '+T.border }}>
           <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, fontWeight:700, color:s.color }}>
             <span style={{ width:6, height:6, borderRadius:'50%', background:s.dot, display:'inline-block' }}/>
-            {s.label}{v.status !== 'moving' && sinceLabel(v.status_since) ? ' · ' + sinceLabel(v.status_since) : ''}
+            {s.label}{ds !== 'moving' && sinceLabel(v.status_since) ? ' · ' + sinceLabel(v.status_since) : ''}
           </span>
           {v.lat && parseFloat(v.lat) !== 0
             ? <span style={{ fontSize:11, color:T.faint, fontFamily:'monospace' }}>{Number(v.lat).toFixed(4)}, {Number(v.lng).toFixed(4)}</span>
@@ -625,16 +648,17 @@ export default function LiveTracking() {
             </div>
 
             {/* Status stat pills */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:7 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6 }}>
               {[
-                ['MOVING',  moving,  T.green, T.greenL, '#BBF7D0', 'moving' ],
-                ['STOPPED', stopped, T.amber, T.amberL, '#FDE68A', 'stopped'],
-                ['OFFLINE', offline, T.grey,  T.greyL,  '#E2E8F0', 'offline'],
+                ['MOVING',  moving,      T.green, T.greenL, '#BBF7D0', 'moving'      ],
+                ['STOPPED', stopped,     T.amber, T.amberL, '#FDE68A', 'stopped'     ],
+                ['24H+',    stoppedLong, T.red,   '#FEE2E2', '#FECACA','stopped_long'],
+                ['OFFLINE', offline,     T.grey,  T.greyL,  '#E2E8F0', 'offline'     ],
               ].map(([l,v,c,bg,bd,id])=>(
                 <button key={l} onClick={()=>setFilter(filter===id?'all':id)}
-                  style={{ borderRadius:10, padding:'10px 6px', textAlign:'center', border:`1.5px solid ${filter===id?c:bd}`, cursor:'pointer', background:filter===id?c:bg, transition:'all .15s' }}>
-                  <div style={{ fontWeight:800, fontSize:20, lineHeight:1, color:filter===id?'white':c }}>{v}</div>
-                  <div style={{ fontSize:9, color:filter===id?'rgba(255,255,255,.75)':T.muted, marginTop:4, fontWeight:700, letterSpacing:.5 }}>{l}</div>
+                  style={{ borderRadius:10, padding:'10px 4px', textAlign:'center', border:`1.5px solid ${filter===id?c:bd}`, cursor:'pointer', background:filter===id?c:bg, transition:'all .15s' }}>
+                  <div style={{ fontWeight:800, fontSize:18, lineHeight:1, color:filter===id?'white':c }}>{v}</div>
+                  <div style={{ fontSize:8.5, color:filter===id?'rgba(255,255,255,.75)':T.muted, marginTop:4, fontWeight:700, letterSpacing:.3 }}>{l}</div>
                 </button>
               ))}
             </div>
@@ -649,7 +673,7 @@ export default function LiveTracking() {
               {search && <button onClick={()=>setSearch('')} style={{ background:'none', border:'none', cursor:'pointer', color:T.faint, display:'flex' }}><X size={12}/></button>}
             </div>
             <div style={{ display:'flex', background:T.bg, borderRadius:9, padding:3, border:'1px solid '+T.border }}>
-              {[['all','All'],['moving','Moving'],['stopped','Stopped'],['offline','Offline']].map(([id,l])=>(
+              {[['all','All'],['moving','Moving'],['stopped','Stopped'],['stopped_long','24h+'],['offline','Offline']].map(([id,l])=>(
                 <button key={id} onClick={()=>setFilter(id)}
                   style={{ flex:1, padding:'6px 3px', borderRadius:7, border:'none', cursor:'pointer', fontSize:11, fontWeight:filter===id?700:400, background:filter===id?T.navy:'transparent', color:filter===id?'white':T.muted, transition:'all .15s', whiteSpace:'nowrap', boxShadow:filter===id?'0 1px 4px rgba(0,0,0,.15)':'none' }}>
                   {l}
@@ -685,8 +709,8 @@ export default function LiveTracking() {
                 <div style={{ fontSize:13, color:T.faint }}>{search?`No results for "${search}"`:'No vehicles found'}</div>
               </div>
             ) : filter !== 'all' ? list.map(renderRow) : (
-              [['moving','Moving'],['stopped','Stopped'],['offline','Offline']].map(([key,label]) => {
-                const group = list.filter(v => v.status === key)
+              [['moving','Moving'],['stopped','Stopped'],['stopped_long','Stopped 24h+'],['offline','Offline']].map(([key,label]) => {
+                const group = list.filter(v => dispStatus(v) === key)
                 if (group.length === 0) return null
                 return (
                   <div key={key} style={{ marginBottom:4 }}>
@@ -746,7 +770,8 @@ export default function LiveTracking() {
 
         {/* ── Selected vehicle card ─────────────────────── */}
         {selected && (() => {
-          const s = st(selected.status)
+          const selDs = dispStatus(selected)
+          const s = st(selDs)
           const hasDriver = selected.owner && selected.owner !== 'Unassigned'
           return (
             <div style={{ position:'absolute', bottom:20, right:20, zIndex:40, width:340, maxWidth:'calc(100vw - 360px)', animation:'kvhSlide .22s ease' }}>
@@ -776,7 +801,7 @@ export default function LiveTracking() {
                       <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:4, minWidth:0 }}>
                         <Car size={11} color="rgba(255,255,255,.4)" style={{ flexShrink:0 }}/>
                         <span style={{ color:'rgba(255,255,255,.5)', fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0 }}>{selected.name} · {selected.plate}</span>
-                        <span style={{ background:`${s.color}22`, color:s.color, fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap', flexShrink:0 }}>{s.label}{selected.status !== 'moving' && sinceLabel(selected.status_since) ? ' · ' + sinceLabel(selected.status_since) : ''}</span>
+                        <span style={{ background:`${s.color}22`, color:s.color, fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap', flexShrink:0 }}>{s.label}{selDs !== 'moving' && sinceLabel(selected.status_since) ? ' · ' + sinceLabel(selected.status_since) : ''}</span>
                       </div>
                     </div>
 
@@ -795,7 +820,7 @@ export default function LiveTracking() {
                     <Gauge size={16} color={selected.speed>0?T.green:T.grey}/>
                     <span style={{ fontSize:32, fontWeight:900, color:selected.speed>0?T.green:T.muted, lineHeight:1 }}>{Math.round(selected.speed||0)}</span>
                     <span style={{ fontSize:13, color:T.muted }}>km/h</span>
-                    <span style={{ marginLeft:'auto', fontSize:12, color:T.muted }}>{selected.status==='moving'?'En route':'Stationary'}</span>
+                    <span style={{ marginLeft:'auto', fontSize:12, color:T.muted }}>{selDs==='moving'?'En route':'Stationary'}</span>
                   </div>
 
                   {/* Battery + Signal */}
