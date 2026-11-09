@@ -7,12 +7,11 @@ import socket, threading, struct, requests, json
 from datetime import datetime
 
 HOST     = '0.0.0.0'
-# Back to 443 — confirmed via journalctl that the tracker DID silently accept
-# the SERVER,...,443,0# SMS command (no "OK" reply, but it actually applied,
-# same as the earlier RESET# case): we saw real successful LOGIN + heartbeat
-# exchanges from this device while the server was running on 443. Don't flip
-# this back to 5023 again without checking the device's current SERVER config.
-PORT     = 443
+# 2026-11-10: device SMS-reconfigured to SERVER,0,208.122.29.50,5023,0# and
+# got an explicit "OK!" reply (unlike the earlier silent-443 case) -- so the
+# tracker now expects port 5023. Keep this in sync with the device's actual
+# SERVER,...# SMS config; don't change one without re-sending the other.
+PORT     = 5023
 API_BASE = 'http://127.0.0.1:8000/api'
 TIMEOUT  = 120   # seconds before idle connection closes
 
