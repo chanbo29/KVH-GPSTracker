@@ -81,6 +81,18 @@ function animateMarker(marker, lat, lng, ms = 450) {
   requestAnimationFrame(step)
 }
 
+// GPS noise: a parked device still reports a few meters of drift on every
+// fix, which used to make the "stationary" pin visibly wobble left/right on
+// every 5s sync. Below this radius, and only while not actually moving, we
+// just keep showing the last displayed point instead of chasing the noise.
+const JITTER_METERS = 15
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000, toRad = d => d * Math.PI / 180
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2
+  return 2 * R * Math.asin(Math.sqrt(a))
+}
+
 // Arrow-shaped marker icon, rotated to the vehicle's heading via an SVG
 // `transform="rotate(...)"` attribute (works reliably even as a standalone
 // data-URI image, unlike a CSS transform on the root <svg>).
@@ -381,10 +393,21 @@ export default function LiveTracking() {
   const syncMarkers = useCallback((data) => {
     if (!gmap.current || !window.google?.maps) return
     data.forEach(v => {
-      const lat = parseFloat(v.lat||0), lng = parseFloat(v.lng||0)
-      if (!lat && !lng) return
+      const rawLat = parseFloat(v.lat||0), rawLng = parseFloat(v.lng||0)
+      if (!rawLat && !rawLng) return
       const isMoving = dispStatus(v) === 'moving'
-      const icon     = mkIcon(dispStatus(v), v.course||0)
+
+      // Smooth out GPS jitter while stationary: only adopt the new fix if
+      // it's actually moving, or it moved more than the noise floor.
+      let lat = rawLat, lng = rawLng
+      const existing = markers.current[v.imei]
+      if (existing && !isMoving) {
+        const cur = existing.getPosition()
+        const movedMeters = haversineMeters(cur.lat(), cur.lng(), rawLat, rawLng)
+        if (movedMeters < JITTER_METERS) { lat = cur.lat(); lng = cur.lng() }
+      }
+
+      const icon = mkIcon(dispStatus(v), v.course||0)
       if (markers.current[v.imei]) {
         animateMarker(markers.current[v.imei], lat, lng)
         markers.current[v.imei].setIcon(icon)
