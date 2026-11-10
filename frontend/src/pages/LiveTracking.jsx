@@ -321,8 +321,33 @@ export default function LiveTracking() {
   const markers    = useRef({})
   const pulses     = useRef({})
   const infoWins   = useRef({})   // one VehicleLabel overlay per vehicle, always visible
+  const trailLine  = useRef(null) // today's route polyline for the selected vehicle only
   const vehiclesRef = useRef([])  // latest fleet data, read from map event listeners/timers
   useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
+
+  // Route trail: drawn only for the vehicle you've selected (click a pin or
+  // a list row) -- never for the whole fleet at once -- and cleared the
+  // instant you deselect it or pick a different vehicle. Traces today's
+  // actual GPS path with a single arrowhead showing direction of travel,
+  // same idea as Google Maps' own trip trail.
+  useEffect(() => {
+    if (trailLine.current) { trailLine.current.setMap(null); trailLine.current = null }
+    if (!selected || !gmap.current || !window.google?.maps) return
+    let cancelled = false
+    const d = new Date()
+    const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    api.vehicles.history(selected.imei, today).then(logs => {
+      if (cancelled || !logs || logs.length < 2) return
+      const path = logs.map(l => ({ lat: parseFloat(l.latitude), lng: parseFloat(l.longitude) }))
+      const color = st(dispStatus(selected)).color
+      trailLine.current = new window.google.maps.Polyline({
+        path, map: gmap.current,
+        strokeColor: color, strokeOpacity: 0.9, strokeWeight: 4,
+        icons: [{ icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 4, strokeColor: color }, offset: '100%' }],
+      })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [selected?.imei])
 
   // When two or more vehicles are close enough together on screen that their
   // always-on labels would collide, don't hide anyone's info — stack the

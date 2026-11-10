@@ -30,7 +30,7 @@ def cambodia_now():
 
 # How long a vehicle must hold a low speed before the map marks it
 # 'stopped' instead of 'moving' -- see receive_gps().
-STOP_GRACE_SECONDS = 60
+STOP_GRACE_SECONDS = 10
 
 
 # ── Vehicle ───────────────────────────────────────────────────
