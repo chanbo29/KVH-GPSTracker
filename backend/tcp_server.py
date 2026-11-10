@@ -7,11 +7,15 @@ import socket, threading, struct, requests, json
 from datetime import datetime
 
 HOST     = '0.0.0.0'
-# 2026-11-10: device SMS-reconfigured to SERVER,0,208.122.29.50,5023,0# and
-# got an explicit "OK!" reply (unlike the earlier silent-443 case) -- so the
-# tracker now expects port 5023. Keep this in sync with the device's actual
-# SERVER,...# SMS config; don't change one without re-sending the other.
-PORT     = 5023
+# 2026-11-10: switched back to 443. Confirmed via an external port checker
+# (yougetsignal.com) that the VPS host's (Daun Penh Data Center) network
+# firewall silently FILTERS inbound 5023 even though our own ufw/iptables
+# allow it -- port 443 came back "closed" (i.e. reachable, just nothing
+# listening) instead of "filtered", so it's actually open at their edge.
+# nginx only binds :80 (see deploy/nginx.conf), so 443 is free for this.
+# Devices must be SMS-reconfigured to SERVER,0,208.122.29.50,443,0# to match.
+# Don't change this port without re-sending that SMS to every tracker.
+PORT     = 443
 API_BASE = 'http://127.0.0.1:8000/api'
 TIMEOUT  = 120   # seconds before idle connection closes
 
