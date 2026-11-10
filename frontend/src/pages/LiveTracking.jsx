@@ -321,32 +321,29 @@ export default function LiveTracking() {
   const markers    = useRef({})
   const pulses     = useRef({})
   const infoWins   = useRef({})   // one VehicleLabel overlay per vehicle, always visible
-  const trailLine  = useRef(null) // today's route polyline for the selected vehicle only
+  const trailLine  = useRef(null) // forward-only route polyline for the selected vehicle
+  const trailPoints= useRef([])   // points accumulated live since selection, not history
+  const selectedRef= useRef(null) // mirrors `selected`'s imei for use inside syncMarkers
   const vehiclesRef = useRef([])  // latest fleet data, read from map event listeners/timers
   useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
+  useEffect(() => { selectedRef.current = selected?.imei || null }, [selected])
 
   // Route trail: drawn only for the vehicle you've selected (click a pin or
-  // a list row) -- never for the whole fleet at once -- and cleared the
-  // instant you deselect it or pick a different vehicle. Traces today's
-  // actual GPS path with a single arrowhead showing direction of travel,
-  // same idea as Google Maps' own trip trail.
+  // a list row) -- never for the whole fleet at once. It starts EMPTY the
+  // moment you select a vehicle (no earlier-today history) and is built up
+  // live, point by point, from syncMarkers as new GPS fixes arrive -- so it
+  // only ever shows where that vehicle goes *after* you start watching it.
+  // Cleared instantly on deselect or when you switch to another vehicle.
   useEffect(() => {
     if (trailLine.current) { trailLine.current.setMap(null); trailLine.current = null }
+    trailPoints.current = []
     if (!selected || !gmap.current || !window.google?.maps) return
-    let cancelled = false
-    const d = new Date()
-    const today = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-    api.vehicles.history(selected.imei, today).then(logs => {
-      if (cancelled || !logs || logs.length < 2) return
-      const path = logs.map(l => ({ lat: parseFloat(l.latitude), lng: parseFloat(l.longitude) }))
-      const color = st(dispStatus(selected)).color
-      trailLine.current = new window.google.maps.Polyline({
-        path, map: gmap.current,
-        strokeColor: color, strokeOpacity: 0.9, strokeWeight: 4,
-        icons: [{ icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 4, strokeColor: color }, offset: '100%' }],
-      })
-    }).catch(() => {})
-    return () => { cancelled = true }
+    const color = st(dispStatus(selected)).color
+    trailLine.current = new window.google.maps.Polyline({
+      path: [], map: gmap.current,
+      strokeColor: color, strokeOpacity: 0.9, strokeWeight: 4,
+      icons: [{ icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 4, strokeColor: color }, offset: '100%' }],
+    })
   }, [selected?.imei])
 
   // When two or more vehicles are close enough together on screen that their
@@ -430,6 +427,19 @@ export default function LiveTracking() {
         const cur = existing.getPosition()
         const movedMeters = haversineMeters(cur.lat(), cur.lng(), rawLat, rawLng)
         if (movedMeters < JITTER_METERS) { lat = cur.lat(); lng = cur.lng() }
+      }
+
+      // Feed the forward-only route trail, only for the vehicle currently
+      // being watched, and only when it's actually moved since the last
+      // point (skip duplicate/near-identical fixes so the line doesn't
+      // accumulate thousands of overlapping points while parked).
+      if (trailLine.current && v.imei === selectedRef.current) {
+        const pts = trailPoints.current
+        const last = pts[pts.length - 1]
+        if (!last || haversineMeters(last.lat, last.lng, lat, lng) >= 5) {
+          pts.push({ lat, lng })
+          trailLine.current.setPath(pts)
+        }
       }
 
       const icon = mkIcon(dispStatus(v), v.course||0)
