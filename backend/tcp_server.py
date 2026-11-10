@@ -202,18 +202,24 @@ def parse_packet(data: bytes):
 # course were wrong — every call was silently getting a 400 Bad Request,
 # since requests.post() doesn't raise on a 4xx and the caller never checked
 # the response, so every parsed GPS fix was being dropped at this last step).
-def api_update_gps(imei: str, lat: float, lng: float, speed: int, course: int, satellites: int = 0):
+def api_update_gps(imei: str, lat: float, lng: float, speed: int, course: int, satellites: int = 0, timestamp: str = None):
     try:
+        payload = {
+            'imei': imei,
+            'latitude': lat,
+            'longitude': lng,
+            'speed': speed,
+            'direction': course,
+            'satellites': satellites,
+        }
+        # The device's own GPS fix time (UTC) -- lets the backend tell a
+        # live fix apart from a point it buffered while offline and is now
+        # replaying as backlog, instead of stamping everything "now".
+        if timestamp:
+            payload['timestamp'] = timestamp
         resp = requests.post(
             f'{API_BASE}/vehicles/receive-gps/',
-            json={
-                'imei': imei,
-                'latitude': lat,
-                'longitude': lng,
-                'speed': speed,
-                'direction': course,
-                'satellites': satellites,
-            },
+            json=payload,
             timeout=3,
         )
         if resp.status_code >= 400:
@@ -289,7 +295,7 @@ def handle_client(conn: socket.socket, addr):
                         log(f'⚠️  GPS: 0,0 — no satellite fix yet (satellites={pkt.get("satellites",0)})')
                     else:
                         log(f'📍 GPS — Lat:{lat} Lng:{lng} Speed:{spd}km/h Sats:{pkt.get("satellites",0)} | {pkt.get("timestamp","")}')
-                        api_update_gps(imei or '', lat, lng, spd, pkt.get('course',0), pkt.get('satellites',0))
+                        api_update_gps(imei or '', lat, lng, spd, pkt.get('course',0), pkt.get('satellites',0), pkt.get('timestamp'))
 
                     # Send GPS ACK — echo back whichever protocol (0x10 or
                     # 0x12) the device actually used, not a hardcoded 0x10.

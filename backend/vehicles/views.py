@@ -120,6 +120,26 @@ class VehicleViewSet(viewsets.ModelViewSet):
                 {'error': f"IMEI {d['imei']} not registered."},
                 status=404
             )
+        # Use the device's own GPS fix time when it sent one (GT06 packets
+        # carry this, UTC, "YYYY-MM-DD HH:MM:SS") rather than always stamping
+        # "now" -- otherwise a backlog the device buffered while offline and
+        # replays on reconnect (points from days ago) gets recorded as if it
+        # just happened, which both corrupts today's history/distance
+        # figures and makes the live map jump to wherever that old point
+        # was. Guarded: only trust it if it parses and isn't absurdly far in
+        # the future (a confused/unsynced device clock) -- fall back to the
+        # server's own receipt time otherwise.
+        log_timestamp = timezone.now()
+        raw_ts = d.get('timestamp')
+        if raw_ts:
+            try:
+                parsed = datetime.datetime.strptime(raw_ts, '%Y-%m-%d %H:%M:%S')
+                parsed = pytz.utc.localize(parsed)
+                if parsed <= timezone.now() + datetime.timedelta(minutes=5):
+                    log_timestamp = parsed
+            except ValueError:
+                pass
+
         GPSLog.objects.create(
             imei       = d['imei'],
             latitude   = d['latitude'],
@@ -128,7 +148,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
             direction  = d['direction'],
             altitude   = d['altitude'],
             satellites = d['satellites'],
-            timestamp  = timezone.now(),
+            timestamp  = log_timestamp,
         )
         # A vehicle only flips to 'stopped' after holding a low speed for a
         # sustained stretch (STOP_GRACE_SECONDS), not on every single slow

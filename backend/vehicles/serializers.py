@@ -102,6 +102,12 @@ class ReceiveGPSSerializer(serializers.Serializer):
     satellites = serializers.IntegerField(default=0)
     battery    = serializers.IntegerField(default=100)
     signal     = serializers.IntegerField(default=4)
+    # The device's own GPS fix time ("YYYY-MM-DD HH:MM:SS", UTC, from the
+    # GT06 packet) -- optional so older/other senders without it still work.
+    # Without this, every point (including a multi-day backlog dumped on
+    # reconnect) got stamped with the server's receipt time, making stale
+    # replayed history look like a live position update.
+    timestamp  = serializers.CharField(max_length=32, required=False, allow_blank=True, allow_null=True)
 
 
 class DriverSerializer(serializers.ModelSerializer):
