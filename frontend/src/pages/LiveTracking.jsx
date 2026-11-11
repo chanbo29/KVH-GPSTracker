@@ -116,16 +116,18 @@ function reverseGeocode(lat, lng, cb) {
   })
 }
 
-// Simple colored dot marker -- status color fill with a white ring, no
-// direction pointer and no car/moto silhouette (replaced per feedback: the
-// arrow-shaped marker wasn't wanted). `course`/`type` are accepted but
-// unused, so callers don't need to change.
+// Smooth navigation-arrow marker (the classic rounded "compass needle" /
+// paper-plane look used by most GPS trackers), rotated to the vehicle's
+// heading, colored by status with a white outline. `type` is accepted but
+// unused -- no separate car/moto silhouette anymore, per feedback.
 function mkIcon(status, course = 0, type = 'car') {
   const color = st(status).color
-  const size  = status === 'moving' ? 20 : 16
-  const r     = size / 2 - 2
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="${color}" stroke="white" stroke-width="2.2"/>
+  const size  = status === 'moving' ? 26 : 20
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
+    <g transform="rotate(${course} 12 12)">
+      <path d="M12 2L4.5 20.29L5.21 21L12 18L18.79 21L19.5 20.29Z"
+        fill="${color}" stroke="white" stroke-width="1.6" stroke-linejoin="round"/>
+    </g>
   </svg>`
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
@@ -627,6 +629,14 @@ export default function LiveTracking() {
     const map = new window.google.maps.Map(mapRef.current, {
       center: { lat:11.5564, lng:104.9282 }, zoom: 13,
       streetViewControl: false, mapTypeControl: false, fullscreenControl: false,
+      // Hide Google's own point-of-interest pins (hospitals, shops,
+      // landmarks, transit stops) -- those are base-map clutter that's
+      // easy to mistake for one of our own vehicle markers, especially
+      // the red ones.
+      styles: [
+        { featureType: 'poi',     stylers: [{ visibility: 'off' }] },
+        { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+      ],
     })
     gmap.current = map
     setMapReady(true)
