@@ -444,31 +444,47 @@ export default function LiveTracking() {
   useEffect(() => {
     try { localStorage.setItem('kvh_custom_groups', JSON.stringify(customGroups)) } catch {}
   }, [customGroups])
-  const createGroup = () => {
-    const name = window.prompt('New group name:')?.trim()
-    if (!name) return
-    setCustomGroups(prev => prev.includes(name) ? prev : [...prev, name])
-  }
+  // Create/rename/delete all go through one styled modal (groupModal) in
+  // place of window.prompt()/window.confirm() -- those native dialogs look
+  // like a browser/OS alert (literally showing the site's raw IP), not
+  // part of the app.
+  const [groupModal, setGroupModal] = useState(null) // { mode:'create'|'rename'|'delete', oldName?, name? }
+  const [groupModalInput, setGroupModalInput] = useState('')
+  const [groupModalBusy, setGroupModalBusy] = useState(false)
+  const closeGroupModal = () => { if (!groupModalBusy) { setGroupModal(null); setGroupModalInput('') } }
+  const createGroup = () => { setGroupModalInput(''); setGroupModal({ mode:'create' }) }
+  const renameGroup = (oldName) => { setGroupModalInput(oldName); setGroupModal({ mode:'rename', oldName }) }
+  const deleteGroup = (name) => { if (name !== 'Ungrouped') setGroupModal({ mode:'delete', name }) }
   // Rename every vehicle currently in `oldName` to `newName` (and update the
   // custom-groups bookkeeping), via the same update endpoint the Vehicles
   // page edit form already uses -- no new backend route needed.
-  const renameGroup = async (oldName) => {
-    const newName = window.prompt(`Rename group "${oldName}" to:`, oldName)?.trim()
-    if (!newName || newName === oldName) return
-    const members = vehicles.filter(v => (v.group || 'Ungrouped') === oldName)
-    await Promise.all(members.map(v => api.vehicles.update(v.imei || v.vehicle_id, { group: newName })))
-    setVehicles(prev => prev.map(v => (v.group || 'Ungrouped') === oldName ? { ...v, group: newName } : v))
-    setCustomGroups(prev => prev.map(g => g === oldName ? newName : g))
-  }
-  // Move every member back to Ungrouped and drop the (possibly empty)
-  // group from the custom-groups list.
-  const deleteGroup = async (name) => {
-    if (name === 'Ungrouped') return
-    if (!window.confirm(`Delete group "${name}"? Its vehicles will move back to Ungrouped.`)) return
-    const members = vehicles.filter(v => (v.group || 'Ungrouped') === name)
-    await Promise.all(members.map(v => api.vehicles.update(v.imei || v.vehicle_id, { group: 'Ungrouped' })))
-    setVehicles(prev => prev.map(v => (v.group || 'Ungrouped') === name ? { ...v, group: 'Ungrouped' } : v))
-    setCustomGroups(prev => prev.filter(g => g !== name))
+  const confirmGroupModal = async () => {
+    if (!groupModal) return
+    const name = groupModalInput.trim()
+    setGroupModalBusy(true)
+    try {
+      if (groupModal.mode === 'create') {
+        if (name) setCustomGroups(prev => prev.includes(name) ? prev : [...prev, name])
+      } else if (groupModal.mode === 'rename') {
+        const { oldName } = groupModal
+        if (name && name !== oldName) {
+          const members = vehicles.filter(v => (v.group || 'Ungrouped') === oldName)
+          await Promise.all(members.map(v => api.vehicles.update(v.imei || v.vehicle_id, { group: name })))
+          setVehicles(prev => prev.map(v => (v.group || 'Ungrouped') === oldName ? { ...v, group: name } : v))
+          setCustomGroups(prev => prev.map(g => g === oldName ? name : g))
+        }
+      } else if (groupModal.mode === 'delete') {
+        const { name: delName } = groupModal
+        const members = vehicles.filter(v => (v.group || 'Ungrouped') === delName)
+        await Promise.all(members.map(v => api.vehicles.update(v.imei || v.vehicle_id, { group: 'Ungrouped' })))
+        setVehicles(prev => prev.map(v => (v.group || 'Ungrouped') === delName ? { ...v, group: 'Ungrouped' } : v))
+        setCustomGroups(prev => prev.filter(g => g !== delName))
+      }
+      setGroupModal(null)
+      setGroupModalInput('')
+    } finally {
+      setGroupModalBusy(false)
+    }
   }
   // Group-header "select all" checkbox -- shows/hides every member's map
   // label at once; indeterminate while the group is mixed.
@@ -1205,6 +1221,49 @@ export default function LiveTracking() {
           )
         })()}
       </div>
+
+      {/* Create/rename/delete group -- one styled modal replacing
+          window.prompt()/window.confirm() for every group action. */}
+      {groupModal && (
+        <div onClick={closeGroupModal}
+          style={{ position:'fixed', inset:0, background:'rgba(15,23,42,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200 }}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{ width:360, background:'white', borderRadius:16, boxShadow:'0 24px 64px rgba(15,23,42,.3)', overflow:'hidden' }}>
+            <div style={{ padding:'20px 22px 0' }}>
+              <h2 style={{ margin:'0 0 4px', fontSize:16, fontWeight:800, color:T.navy }}>
+                {groupModal.mode==='create' ? 'New group' : groupModal.mode==='rename' ? `Rename "${groupModal.oldName}"` : `Delete "${groupModal.name}"?`}
+              </h2>
+              <p style={{ margin:'0 0 16px', fontSize:12.5, color:T.muted }}>
+                {groupModal.mode==='create' && 'Give your fleet group a name -- you can assign vehicles to it afterward.'}
+                {groupModal.mode==='rename' && 'Every vehicle in this group will move to the new name.'}
+                {groupModal.mode==='delete' && 'Its vehicles will move back to Ungrouped. This can’t be undone.'}
+              </p>
+            </div>
+            {groupModal.mode !== 'delete' && (
+              <div style={{ padding:'0 22px 20px' }}>
+                <label style={{ display:'block', fontSize:11, fontWeight:700, color:T.muted, marginBottom:7, textTransform:'uppercase', letterSpacing:.4 }}>Group name</label>
+                <input autoFocus value={groupModalInput} onChange={e=>setGroupModalInput(e.target.value)}
+                  onKeyDown={e=>{ if (e.key==='Enter') confirmGroupModal(); if (e.key==='Escape') closeGroupModal() }}
+                  placeholder="e.g. Delivery, Staff Cars"
+                  style={{ width:'100%', padding:'11px 13px', border:'1.5px solid '+T.border, borderRadius:10, fontSize:13.5, outline:'none', background:T.bg, boxSizing:'border-box' }}/>
+              </div>
+            )}
+            <div style={{ padding:'14px 22px', borderTop:'1px solid '+T.border, display:'flex', justifyContent:'flex-end', gap:8, background:T.bg }}>
+              <button onClick={closeGroupModal} disabled={groupModalBusy}
+                style={{ padding:'9px 16px', borderRadius:10, border:'1.5px solid '+T.border, background:'white', fontSize:13, fontWeight:700, color:T.navy, cursor:'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={confirmGroupModal} disabled={groupModalBusy || (groupModal.mode !== 'delete' && !groupModalInput.trim())}
+                style={{ padding:'9px 18px', borderRadius:10, border:'none',
+                  background: groupModal.mode==='delete' ? T.red : T.blue, color:'white', fontSize:13, fontWeight:700,
+                  boxShadow: groupModal.mode==='delete' ? '0 2px 8px rgba(220,38,38,.35)' : '0 2px 8px rgba(27,107,181,.35)',
+                  cursor:'pointer', opacity: groupModalBusy ? 0.6 : 1 }}>
+                {groupModalBusy ? 'Saving…' : groupModal.mode==='create' ? 'Create group' : groupModal.mode==='rename' ? 'Save' : 'Delete group'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
