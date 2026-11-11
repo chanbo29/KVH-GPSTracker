@@ -503,6 +503,15 @@ export default function LiveTracking() {
   // Group-header "select all" checkbox -- shows/hides every member's map
   // label at once; indeterminate while the group is mixed.
   const [openGroupMenu, setOpenGroupMenu] = useState(null)
+  // Per-row "move to group" menu -- holds the imei of whichever row's menu
+  // is open (only one at a time).
+  const [openRowMenu, setOpenRowMenu] = useState(null)
+  const moveVehicleToGroup = async (v, groupName) => {
+    setOpenRowMenu(null)
+    if ((v.group || 'Ungrouped') === groupName) return
+    await api.vehicles.update(v.imei || v.vehicle_id, { group: groupName })
+    setVehicles(prev => prev.map(x => x.imei === v.imei ? { ...x, group: groupName } : x))
+  }
   const groupLabelState = (members) => {
     const imeis = members.map(v => v.imei)
     const hiddenCount = imeis.filter(id => hiddenLabels.has(id)).length
@@ -790,6 +799,17 @@ export default function LiveTracking() {
     seen.sort((a,b) => a==='Ungrouped' ? 1 : b==='Ungrouped' ? -1 : a.localeCompare(b))
     return seen
   })()
+  // Every group that exists at all, independent of the current search/
+  // status filter -- used for the per-row "move to group" picker so it
+  // always offers the full set, not just whatever groupNames shows right now.
+  const allGroupNames = (() => {
+    const seen = []
+    vehicles.forEach(v => { const g = v.group || 'Ungrouped'; if (!seen.includes(g)) seen.push(g) })
+    customGroups.forEach(g => { if (!seen.includes(g)) seen.push(g) })
+    if (!seen.includes('Ungrouped')) seen.push('Ungrouped')
+    seen.sort((a,b) => a==='Ungrouped' ? 1 : b==='Ungrouped' ? -1 : a.localeCompare(b))
+    return seen
+  })()
   const moving      = vehicles.filter(v=>dispStatus(v)==='moving').length
   const stopped     = vehicles.filter(v=>dispStatus(v)==='stopped').length
   const stoppedLong = vehicles.filter(v=>dispStatus(v)==='stopped_long').length
@@ -841,6 +861,30 @@ export default function LiveTracking() {
         <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
           <span style={{ fontSize:12.5, fontWeight:700, color:T.muted }}>{Math.round(v.speed||0)} kph</span>
           <span style={{ width:9, height:9, borderRadius:'50%', background:s.dot, display:'inline-block', flexShrink:0 }} title={s.label}/>
+        </div>
+
+        {/* Move to a different group */}
+        <div style={{ position:'relative', flexShrink:0 }}>
+          <button onClick={e=>{e.stopPropagation(); setOpenRowMenu(openRowMenu===v.imei?null:v.imei)}}
+            title="Move to group"
+            style={{ border:'none', background:'none', cursor:'pointer', color:T.faint, padding:'2px 4px' }}>⋮</button>
+          {openRowMenu===v.imei && (
+            <div onClick={e=>e.stopPropagation()}
+              style={{ position:'absolute', top:'100%', right:0, zIndex:30, background:'white', border:'1px solid '+T.border, borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,.12)', overflow:'hidden', minWidth:150, maxHeight:220, overflowY:'auto' }}>
+              <div style={{ padding:'7px 12px', fontSize:10, fontWeight:700, color:T.faint, textTransform:'uppercase', letterSpacing:.4, borderBottom:'1px solid '+T.border }}>Move to…</div>
+              {allGroupNames.map(g => (
+                <button key={g} onClick={()=>moveVehicleToGroup(v, g)}
+                  disabled={(v.group || 'Ungrouped') === g}
+                  style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', border:'none',
+                    background: (v.group || 'Ungrouped') === g ? T.blueL : 'none',
+                    cursor: (v.group || 'Ungrouped') === g ? 'default' : 'pointer',
+                    fontSize:12, fontWeight: (v.group || 'Ungrouped') === g ? 700 : 500,
+                    color: (v.group || 'Ungrouped') === g ? T.blue : T.navy }}>
+                  {g}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     )
