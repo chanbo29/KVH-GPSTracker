@@ -406,6 +406,60 @@ export default function LiveTracking() {
       return next
     })
   }
+  // Empty groups/folders created ahead of assigning any vehicle to them --
+  // kept client-side since Vehicle.group is just a free-text field with no
+  // backing "Group" table of its own. Merged into groupNames below so a
+  // freshly-created group shows up (with a 0 count) even before any
+  // vehicle is moved into it.
+  const [customGroups, setCustomGroups] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('kvh_custom_groups') || '[]') } catch { return [] }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('kvh_custom_groups', JSON.stringify(customGroups)) } catch {}
+  }, [customGroups])
+  const createGroup = () => {
+    const name = window.prompt('New group name:')?.trim()
+    if (!name) return
+    setCustomGroups(prev => prev.includes(name) ? prev : [...prev, name])
+  }
+  // Rename every vehicle currently in `oldName` to `newName` (and update the
+  // custom-groups bookkeeping), via the same update endpoint the Vehicles
+  // page edit form already uses -- no new backend route needed.
+  const renameGroup = async (oldName) => {
+    const newName = window.prompt(`Rename group "${oldName}" to:`, oldName)?.trim()
+    if (!newName || newName === oldName) return
+    const members = vehicles.filter(v => (v.group || 'Ungrouped') === oldName)
+    await Promise.all(members.map(v => api.vehicles.update(v.imei || v.vehicle_id, { group: newName })))
+    setVehicles(prev => prev.map(v => (v.group || 'Ungrouped') === oldName ? { ...v, group: newName } : v))
+    setCustomGroups(prev => prev.map(g => g === oldName ? newName : g))
+  }
+  // Move every member back to Ungrouped and drop the (possibly empty)
+  // group from the custom-groups list.
+  const deleteGroup = async (name) => {
+    if (name === 'Ungrouped') return
+    if (!window.confirm(`Delete group "${name}"? Its vehicles will move back to Ungrouped.`)) return
+    const members = vehicles.filter(v => (v.group || 'Ungrouped') === name)
+    await Promise.all(members.map(v => api.vehicles.update(v.imei || v.vehicle_id, { group: 'Ungrouped' })))
+    setVehicles(prev => prev.map(v => (v.group || 'Ungrouped') === name ? { ...v, group: 'Ungrouped' } : v))
+    setCustomGroups(prev => prev.filter(g => g !== name))
+  }
+  // Group-header "select all" checkbox -- shows/hides every member's map
+  // label at once; indeterminate while the group is mixed.
+  const [openGroupMenu, setOpenGroupMenu] = useState(null)
+  const groupLabelState = (members) => {
+    const imeis = members.map(v => v.imei)
+    const hiddenCount = imeis.filter(id => hiddenLabels.has(id)).length
+    return { allHidden: hiddenCount === imeis.length && imeis.length > 0, someHidden: hiddenCount > 0 && hiddenCount < imeis.length }
+  }
+  const toggleGroupLabels = (members) => {
+    const imeis = members.map(v => v.imei)
+    const { allHidden } = groupLabelState(members)
+    setHiddenLabels(prev => {
+      const next = new Set(prev)
+      imeis.forEach(id => { if (allHidden) next.delete(id); else next.add(id) })
+      return next
+    })
+  }
   // Ticks once a second so every on-screen "stopped Xs"/"moving Xs" duration
   // visibly counts up in real time, independent of the 5s data-poll cycle.
   const [tick, setTick] = useState(0)
@@ -656,6 +710,9 @@ export default function LiveTracking() {
   const groupNames = (() => {
     const seen = []
     list.forEach(v => { const g = v.group || 'Ungrouped'; if (!seen.includes(g)) seen.push(g) })
+    // Include empty custom groups too (not yet carrying any vehicle) so a
+    // freshly-created group stays visible until something is assigned to it.
+    customGroups.forEach(g => { if (!seen.includes(g)) seen.push(g) })
     seen.sort((a,b) => a==='Ungrouped' ? 1 : b==='Ungrouped' ? -1 : a.localeCompare(b))
     return seen
   })()
@@ -667,77 +724,49 @@ export default function LiveTracking() {
   // One vehicle-list row — shared by the flat list (a status filter is
   // active) and the grouped view (Moving/Stopped/Offline sections, shown
   // when filter is "All" so a busy fleet is easier to scan at a glance).
+  // "YYYY-MM-DD HH:MM:SS" in the browser's local time -- sv-SE's locale
+  // formatting happens to produce exactly that layout.
+  const rowTimestamp = iso => iso ? new Date(iso).toLocaleString('sv-SE') : ''
+
   const renderRow = v => {
     const ds   = dispStatus(v)
     const s    = st(ds)
     const isSel= selected?.imei === v.imei
-    const hasDriver = v.owner && v.owner !== 'Unassigned'
     return (
       <div key={v.imei}
         className={isSel?'':'kvh-vrow'}
         onClick={()=>focus(v)}
-        style={{ padding:'12px 12px', marginBottom:5, borderRadius:12, cursor:'pointer',
+        style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 10px', marginBottom:3, borderRadius:10, cursor:'pointer',
           background: isSel ? T.blueL : 'white',
           border:     isSel ? `1.5px solid ${T.blue}` : '1.5px solid '+T.border,
-          boxShadow:  isSel ? `0 2px 12px rgba(27,107,181,.12)` : '0 1px 2px rgba(0,0,0,.04)',
         }}>
 
-        <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+        {/* Show/hide this vehicle's floating map label -- pin stays put
+            either way, this just declutters the map on request. */}
+        <input
+          type="checkbox"
+          checked={!hiddenLabels.has(v.imei)}
+          onClick={e => e.stopPropagation()}
+          onChange={() => toggleLabel(v.imei)}
+          title="Show label on map"
+          style={{ flexShrink:0, width:16, height:16, cursor:'pointer', accentColor:T.blue }}
+        />
 
-          {/* Show/hide this vehicle's floating map label -- pin stays put
-              either way, this just declutters the map on request. */}
-          <input
-            type="checkbox"
-            checked={!hiddenLabels.has(v.imei)}
-            onClick={e => e.stopPropagation()}
-            onChange={() => toggleLabel(v.imei)}
-            title="Show label on map"
-            style={{ flexShrink:0, width:16, height:16, cursor:'pointer', accentColor:T.blue }}
-          />
-
-          {/* Avatar — driver initials or car icon */}
-          <div style={{ position:'relative', flexShrink:0 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:s.bg, border:`1.5px solid ${s.color}33`, display:'flex', alignItems:'center', justifyContent:'center', fontWeight:800, fontSize:14, color:s.color }}>
-              {hasDriver
-                ? v.owner.trim().split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()
-                : <Car size={20} color={s.color}/>
-              }
-            </div>
-            <div style={{ position:'absolute', bottom:-2, right:-2, width:11, height:11, borderRadius:'50%', background:s.dot, border:'2.5px solid white' }}/>
+        {/* Plate(name) + last-update timestamp */}
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontWeight:700, fontSize:13.5, color:T.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {v.plate}
+            {v.name && <span style={{ fontWeight:500, color:T.muted }}> ({v.name})</span>}
           </div>
-
-          {/* ── Driver name (primary) + Car below ── */}
-          <div style={{ flex:1, minWidth:0 }}>
-            {/* Driver name — primary label */}
-            <div style={{ fontWeight:700, fontSize:14, color:T.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {hasDriver ? v.owner : '— No driver —'}
-            </div>
-            {/* Car name + plate — secondary */}
-            <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
-              <Car size={11} color={T.faint}/>
-              <span style={{ fontSize:12, color:T.faint, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {v.name} · {v.plate}
-              </span>
-            </div>
-          </div>
-
-          {/* Speed */}
-          <div style={{ textAlign:'right', flexShrink:0 }}>
-            <div style={{ fontSize:18, fontWeight:900, color:v.speed>0?s.color:'#CBD5E1', lineHeight:1 }}>{Math.round(v.speed||0)}</div>
-            <div style={{ fontSize:10, color:T.faint, marginTop:2 }}>km/h</div>
+          <div style={{ fontSize:10.5, color:T.faint, marginTop:2 }}>
+            {rowTimestamp(v.last_update) || 'No GPS signal'}
           </div>
         </div>
 
-        {/* Status + coords */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:10, paddingTop:8, borderTop:'1px solid '+T.border }}>
-          <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:11, fontWeight:700, color:s.color }}>
-            <span style={{ width:6, height:6, borderRadius:'50%', background:s.dot, display:'inline-block' }}/>
-            {s.label}{ds !== 'moving' && sinceLabel(v.status_since) ? ' · ' + sinceLabel(v.status_since) : ''}
-          </span>
-          {v.lat && parseFloat(v.lat) !== 0
-            ? <span style={{ fontSize:11, color:T.faint, fontFamily:'monospace' }}>{Number(v.lat).toFixed(4)}, {Number(v.lng).toFixed(4)}</span>
-            : <span style={{ fontSize:11, color:'#CBD5E1' }}>No GPS signal</span>
-          }
+        {/* Speed + status dot (color-coded, no text label) */}
+        <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+          <span style={{ fontSize:12.5, fontWeight:700, color:T.muted }}>{Math.round(v.speed||0)} kph</span>
+          <span style={{ width:9, height:9, borderRadius:'50%', background:s.dot, display:'inline-block', flexShrink:0 }} title={s.label}/>
         </div>
       </div>
     )
@@ -876,7 +905,13 @@ export default function LiveTracking() {
           {/* Label row */}
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 18px 6px', flexShrink:0 }}>
             <span style={{ fontSize:10, fontWeight:700, color:T.faint, letterSpacing:1, textTransform:'uppercase' }}>Vehicles</span>
-            <span style={{ fontSize:11, color:T.faint }}>{list.length} shown</span>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:11, color:T.faint }}>{list.length} shown</span>
+              <button onClick={createGroup} title="Create group"
+                style={{ display:'flex', alignItems:'center', gap:4, border:'none', background:'none', cursor:'pointer', color:T.blue, fontSize:11, fontWeight:700, padding:0 }}>
+                <Layers size={13}/>+
+              </button>
+            </div>
           </div>
 
           {/* ── Vehicle list ─────────────────────────────── */}
@@ -899,19 +934,42 @@ export default function LiveTracking() {
             ) : (
               groupNames.map(gname => {
                 const groupList = list.filter(v => (v.group || 'Ungrouped') === gname)
-                if (groupList.length === 0) return null
+                if (groupList.length === 0 && !customGroups.includes(gname)) return null
                 const collapsed = collapsedGroups.has(gname)
+                const { allHidden, someHidden } = groupLabelState(groupList)
                 return (
                   <div key={gname} style={{ marginBottom:6 }}>
                     {/* Fleet group/folder header -- click to collapse/expand */}
-                    <div onClick={()=>toggleGroupCollapsed(gname)}
-                      style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 6px', cursor:'pointer', userSelect:'none', borderRadius:8 }}>
-                      {collapsed ? <ChevronRight size={13} color={T.muted}/> : <ChevronDown size={13} color={T.muted}/>}
-                      <Layers size={12} color={T.muted}/>
-                      <span style={{ fontSize:11.5, fontWeight:800, color:T.navy }}>{gname}</span>
-                      <span style={{ fontSize:11, color:T.faint }}>({groupList.length})</span>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 6px', borderRadius:8, position:'relative' }}>
+                      <input type="checkbox" checked={!allHidden} ref={el => { if (el) el.indeterminate = someHidden }}
+                        onClick={e=>e.stopPropagation()} onChange={()=>toggleGroupLabels(groupList)}
+                        disabled={groupList.length===0}
+                        title="Show/hide all labels in this group"
+                        style={{ width:14, height:14, cursor: groupList.length ? 'pointer' : 'default', accentColor:T.blue, flexShrink:0 }}/>
+                      <div onClick={()=>toggleGroupCollapsed(gname)} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', userSelect:'none', flex:1, minWidth:0 }}>
+                        {collapsed ? <ChevronRight size={13} color={T.muted}/> : <ChevronDown size={13} color={T.muted}/>}
+                        <Layers size={12} color={T.muted}/>
+                        <span style={{ fontSize:11.5, fontWeight:800, color:T.navy, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{gname}</span>
+                        <span style={{ fontSize:11, color:T.faint, flexShrink:0 }}>({groupList.length})</span>
+                      </div>
+                      <button onClick={e=>{e.stopPropagation(); setOpenGroupMenu(openGroupMenu===gname?null:gname)}}
+                        style={{ border:'none', background:'none', cursor:'pointer', color:T.faint, padding:'2px 4px', flexShrink:0 }}>⋮</button>
+                      {openGroupMenu===gname && (
+                        <div onClick={e=>e.stopPropagation()}
+                          style={{ position:'absolute', top:'100%', right:4, zIndex:20, background:'white', border:'1px solid '+T.border, borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,.12)', overflow:'hidden', minWidth:120 }}>
+                          <button onClick={()=>{renameGroup(gname); setOpenGroupMenu(null)}}
+                            style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', border:'none', background:'none', cursor:'pointer', fontSize:12, color:T.navy }}>Rename</button>
+                          {gname !== 'Ungrouped' && (
+                            <button onClick={()=>{deleteGroup(gname); setOpenGroupMenu(null)}}
+                              style={{ display:'block', width:'100%', textAlign:'left', padding:'8px 12px', border:'none', background:'none', cursor:'pointer', fontSize:12, color:T.red }}>Delete</button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    {!collapsed && (filter !== 'all' ? groupList.map(renderRow) : (
+                    {!collapsed && groupList.length === 0 && (
+                      <div style={{ fontSize:11, color:T.faint, padding:'4px 10px 8px' }}>No vehicles yet</div>
+                    )}
+                    {!collapsed && groupList.length > 0 && (filter !== 'all' ? groupList.map(renderRow) : (
                       [['moving','Moving'],['stopped','Stopped'],['stopped_long','Stopped 24h+'],['offline','Offline']].map(([key,label]) => {
                         const sub = groupList.filter(v => dispStatus(v) === key)
                         if (sub.length === 0) return null
