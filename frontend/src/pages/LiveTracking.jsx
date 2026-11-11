@@ -1043,22 +1043,7 @@ export default function LiveTracking() {
                     {!collapsed && groupList.length === 0 && (
                       <div style={{ fontSize:11, color:T.faint, padding:'4px 10px 8px' }}>No vehicles yet</div>
                     )}
-                    {!collapsed && groupList.length > 0 && (filter !== 'all' ? groupList.map(renderRow) : (
-                      [['moving','Moving'],['stopped','Stopped'],['stopped_long','Stopped 24h+'],['offline','Offline']].map(([key,label]) => {
-                        const sub = groupList.filter(v => dispStatus(v) === key)
-                        if (sub.length === 0) return null
-                        return (
-                          <div key={key} style={{ marginBottom:4, paddingLeft:6 }}>
-                            <div style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 4px 6px' }}>
-                              <span style={{ width:6, height:6, borderRadius:'50%', background:st(key).dot, flexShrink:0 }}/>
-                              <span style={{ fontSize:10, fontWeight:700, color:T.faint, letterSpacing:.6, textTransform:'uppercase' }}>{label}</span>
-                              <span style={{ fontSize:10, color:T.faint }}>· {sub.length}</span>
-                            </div>
-                            {sub.map(renderRow)}
-                          </div>
-                        )
-                      })
-                    ))}
+                    {!collapsed && groupList.length > 0 && groupList.map(renderRow)}
                   </div>
                 )
               })
