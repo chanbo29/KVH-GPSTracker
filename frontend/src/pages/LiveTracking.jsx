@@ -243,10 +243,12 @@ function getVehicleLabelClass() {
       if (!pt) return
       this.div.style.left = pt.x + 'px'
       this.div.style.top = pt.y + 'px'
+      if (this.div) this.div.style.display = this.visible === false ? 'none' : ''
+      const showStack = this.lift > 6 && this.visible !== false
       if (this.connector) {
         this.connector.style.left = pt.x + 'px'
         this.connector.style.transform = 'translateX(-50%)'
-        if (this.lift > 6) {
+        if (showStack) {
           this.connector.style.display = 'block'
           this.connector.style.top = (pt.y - 15 - this.lift) + 'px'
           this.connector.style.height = (this.lift + 10) + 'px'
@@ -258,7 +260,7 @@ function getVehicleLabelClass() {
         this.anchorDot.style.left = pt.x + 'px'
         this.anchorDot.style.top  = pt.y + 'px'
         this.anchorDot.style.transform = 'translate(-50%, -50%)'
-        this.anchorDot.style.display = this.lift > 6 ? 'block' : 'none'
+        this.anchorDot.style.display = showStack ? 'block' : 'none'
       }
     }
     // Raises this label `px` above its normal spot (stacking it clear of a
@@ -285,6 +287,13 @@ function getVehicleLabelClass() {
     // transition, since nothing but the duration text actually changed.
     retext(html) {
       if (this.card) this.card.innerHTML = html
+    }
+    // Show/hide the floating bubble without destroying it -- used by the
+    // sidebar's per-vehicle checkboxes so unchecked vehicles keep their map
+    // pin but stop cluttering the map with a label.
+    setVisible(visible) {
+      this.visible = visible
+      this.draw()
     }
     onRemove() {
       clearTimeout(this._transTimer)
@@ -334,6 +343,25 @@ export default function LiveTracking() {
   const [open,     setOpen]     = useState(true)
   const [lastSync, setLastSync] = useState(null)
   const [mapReady, setMapReady] = useState(false)
+  // Which vehicles' floating map labels are checked "on" in the sidebar
+  // (Traccar-style multi-select) -- unchecking a vehicle hides its label
+  // clutter on the map while leaving its colored pin in place. Empty set
+  // means "show every label", so a fresh session looks exactly as before.
+  const [hiddenLabels, setHiddenLabels] = useState(() => new Set())
+  const hiddenLabelsRef = useRef(hiddenLabels)
+  useEffect(() => {
+    hiddenLabelsRef.current = hiddenLabels
+    Object.keys(infoWins.current).forEach(imei => {
+      infoWins.current[imei]?.setVisible(!hiddenLabels.has(imei))
+    })
+  }, [hiddenLabels])
+  const toggleLabel = (imei) => {
+    setHiddenLabels(prev => {
+      const next = new Set(prev)
+      if (next.has(imei)) next.delete(imei); else next.add(imei)
+      return next
+    })
+  }
   // Ticks once a second so every on-screen "stopped Xs"/"moving Xs" duration
   // visibly counts up in real time, independent of the 5s data-poll cycle.
   const [tick, setTick] = useState(0)
@@ -498,6 +526,7 @@ export default function LiveTracking() {
         // exists — no click needed — gliding smoothly with the pin.
         const LabelCls = getVehicleLabelClass()
         infoWins.current[v.imei] = new LabelCls(gmap.current, { lat, lng }, mkInfoHtml(v), st(dispStatus(v)).color)
+        infoWins.current[v.imei].setVisible(!hiddenLabelsRef.current.has(v.imei))
       }
       // Keep the always-visible label in sync with live position/data
       if (infoWins.current[v.imei]) {
@@ -602,6 +631,17 @@ export default function LiveTracking() {
         }}>
 
         <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+
+          {/* Show/hide this vehicle's floating map label -- pin stays put
+              either way, this just declutters the map on request. */}
+          <input
+            type="checkbox"
+            checked={!hiddenLabels.has(v.imei)}
+            onClick={e => e.stopPropagation()}
+            onChange={() => toggleLabel(v.imei)}
+            title="Show label on map"
+            style={{ flexShrink:0, width:16, height:16, cursor:'pointer', accentColor:T.blue }}
+          />
 
           {/* Avatar — driver initials or car icon */}
           <div style={{ position:'relative', flexShrink:0 }}>
