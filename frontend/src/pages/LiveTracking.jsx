@@ -148,10 +148,24 @@ const clusterRenderer = {
   render({ count, position }) {
     const size = count < 10 ? 84 : count < 50 ? 104 : 124
     const c = '#0EA5B5'
+    const rOuter = size/2 - 3, rMid = size/2 - 18, rCore = size/2 - 32
+    // Native SVG SMIL <animate> tags, not CSS -- these keep animating even
+    // though the icon is a plain data-URI image inside a Marker, not a DOM
+    // overlay: the outer rings breathe outward and fade, the core stays put
+    // and solid so the count stays readable. A slight per-ring delay keeps
+    // it from reading as one flat blink.
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 3}"  fill="${c}" fill-opacity="0.22"/>
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 18}" fill="${c}" fill-opacity="0.4"/>
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 32}" fill="${c}" stroke="white" stroke-width="2.5"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${rOuter}" fill="${c}" fill-opacity="0.22">
+        <animate attributeName="r" values="${rOuter};${rOuter+10};${rOuter}" dur="2.6s" repeatCount="indefinite"/>
+        <animate attributeName="fill-opacity" values="0.22;0.04;0.22" dur="2.6s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="${size/2}" cy="${size/2}" r="${rMid}" fill="${c}" fill-opacity="0.4">
+        <animate attributeName="r" values="${rMid};${rMid+8};${rMid}" dur="2.6s" begin="0.3s" repeatCount="indefinite"/>
+        <animate attributeName="fill-opacity" values="0.4;0.15;0.4" dur="2.6s" begin="0.3s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="${size/2}" cy="${size/2}" r="${rCore}" fill="${c}" stroke="white" stroke-width="2.5">
+        <animate attributeName="r" values="${rCore};${rCore*1.06};${rCore}" dur="2.6s" repeatCount="indefinite"/>
+      </circle>
     </svg>`
     return new window.google.maps.Marker({
       position,
