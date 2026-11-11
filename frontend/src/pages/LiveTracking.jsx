@@ -161,26 +161,22 @@ function mkIcon(status, course = 0, type = 'car') {
 function mkInfoHtml(v) {
   const ds = dispStatus(v)
   const s = st(ds)
-  const title = (v.owner && v.owner !== 'Unassigned') ? v.owner : (v.name || 'Vehicle')
   // Only stopped/offline vehicles get a duration; a moving vehicle shows its
   // live speed instead — whichever is the one number that matters right now.
   const info = ds === 'moving'
-    ? `${Math.round(v.speed || 0)} km/h`
-    : sinceLabel(v.status_since)
-  // Small, two-line card: name + status pill, then plate + the one live
-  // number (speed or stopped/offline duration) — no coordinates, no second
-  // "vehicle name" repeat, so a stacked pair stays compact.
+    ? `${Math.round(v.speed || 0)} kph`
+    : (sinceLabel(v.status_since) || s.label)
+  // Compact single-line pill: plate(name) (speed/duration), colored by the
+  // vehicle's current status -- the dot and the trailing number both pick
+  // up the status color, so a glance at the map tells you moving (green)
+  // from stopped (yellow) from stopped 24h+ (red) from offline (grey)
+  // without opening the card.
   return `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:3px">
-        <span style="font-weight:800;font-size:12px;color:#0F172A;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${title}">${title}</span>
-        <span style="display:flex;align-items:center;gap:4px;background:${s.bg};padding:2px 6px;border-radius:20px;flex-shrink:0">
-          <span class="${ds==='moving'?'kvh-dot-live':''}" style="width:5px;height:5px;border-radius:50%;background:${s.dot}"></span>
-          <span style="font-size:8px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.4px">${s.label}</span>
-        </span>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px" title="${v.plate || ''} · ${info}">
-        <span style="font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#64748B;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.plate || ''}</span>
-        <span style="font-size:10.5px;font-weight:700;color:${s.color};flex-shrink:0">${info}</span>
+      <div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+        <span class="${ds==='moving'?'kvh-dot-live':''}" style="width:7px;height:7px;border-radius:50%;background:${s.dot};flex-shrink:0"></span>
+        <span style="font-size:12px;font-weight:800;color:#0F172A;letter-spacing:-.1px">${v.plate || ''}</span>
+        <span style="font-size:11px;font-weight:600;color:#475569">(${v.name || ''})</span>
+        <span style="font-size:11.5px;font-weight:800;color:${s.color}">(${info})</span>
       </div>
   `
 }
@@ -536,7 +532,7 @@ export default function LiveTracking() {
       // the vehicle stops, so the next move starts a clean new trail.
       if (isMoving) {
         if (!trailLines.current[v.imei]) {
-          const color = st('moving').color
+          const color = st(dispStatus(v)).color
           trailLines.current[v.imei] = new window.google.maps.Polyline({
             path: [], map: gmap.current,
             strokeColor: color, strokeOpacity: 0.9, strokeWeight: 4,
