@@ -146,12 +146,12 @@ const CLUSTER_LABEL_ZOOM = 12
 // in place of its (plain, unstyled) default bubble.
 const clusterRenderer = {
   render({ count, position }) {
-    const size = count < 10 ? 120 : count < 50 ? 148 : 176
+    const size = count < 10 ? 84 : count < 50 ? 104 : 124
     const c = '#0EA5B5'
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 4}"  fill="${c}" fill-opacity="0.22"/>
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 26}" fill="${c}" fill-opacity="0.4"/>
-      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 46}" fill="${c}" stroke="white" stroke-width="3"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 3}"  fill="${c}" fill-opacity="0.22"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 18}" fill="${c}" fill-opacity="0.4"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 32}" fill="${c}" stroke="white" stroke-width="2.5"/>
     </svg>`
     return new window.google.maps.Marker({
       position,
@@ -160,7 +160,7 @@ const clusterRenderer = {
         scaledSize: new window.google.maps.Size(size, size),
         anchor: new window.google.maps.Point(size / 2, size / 2),
       },
-      label: { text: String(count), color: 'white', fontSize: '32px', fontWeight: '700' },
+      label: { text: String(count), color: 'white', fontSize: '22px', fontWeight: '700' },
       zIndex: 1000 + count,
     })
   },
