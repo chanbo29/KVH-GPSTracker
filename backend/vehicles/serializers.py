@@ -32,7 +32,7 @@ class VehicleSerializer(serializers.ModelSerializer):
         fields = ['vehicle_id', 'imei', 'name', 'type', 'plate',
                   'brand', 'model', 'color', 'location', 'distance_unit',
                   'fuel_type', 'notes', 'photo',
-                  'owner', 'status', 'live_status', 'battery', 'signal',
+                  'owner', 'group', 'status', 'live_status', 'battery', 'signal',
                   'lat', 'lng', 'speed', 'last_update', 'status_since',
                   'created_at', 'updated_at']
         read_only_fields = ['vehicle_id', 'created_at', 'updated_at',

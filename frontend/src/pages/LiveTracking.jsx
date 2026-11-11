@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Car, Navigation, Wifi, WifiOff, Battery, Gauge,
   MapPin, X, RefreshCw, Users, Search,
-  ChevronLeft, ChevronRight, User, Layers, Clock,
+  ChevronLeft, ChevronRight, ChevronDown, User, Layers, Clock,
 } from 'lucide-react'
 import { api } from '../api/client.js'
 import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
@@ -400,6 +400,16 @@ export default function LiveTracking() {
       return next
     })
   }
+  // Fleet groups/folders (Vehicle.group) collapsed in the sidebar -- empty
+  // set means every group starts expanded.
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set())
+  const toggleGroupCollapsed = (name) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name); else next.add(name)
+      return next
+    })
+  }
   // Ticks once a second so every on-screen "stopped Xs"/"moving Xs" duration
   // visibly counts up in real time, independent of the 5s data-poll cycle.
   const [tick, setTick] = useState(0)
@@ -645,6 +655,14 @@ export default function LiveTracking() {
   }
 
   const list        = vehicles.filter(v=>(filter==='all'||dispStatus(v)===filter)&&(!search||v.name?.toLowerCase().includes(search.toLowerCase())||v.plate?.toLowerCase().includes(search.toLowerCase())||v.owner?.toLowerCase().includes(search.toLowerCase())))
+  // Fleet groups/folders, in first-seen order with "Ungrouped" always last
+  // so a fleet that hasn't set up custom groups yet looks unchanged.
+  const groupNames = (() => {
+    const seen = []
+    list.forEach(v => { const g = v.group || 'Ungrouped'; if (!seen.includes(g)) seen.push(g) })
+    seen.sort((a,b) => a==='Ungrouped' ? 1 : b==='Ungrouped' ? -1 : a.localeCompare(b))
+    return seen
+  })()
   const moving      = vehicles.filter(v=>dispStatus(v)==='moving').length
   const stopped     = vehicles.filter(v=>dispStatus(v)==='stopped').length
   const stoppedLong = vehicles.filter(v=>dispStatus(v)==='stopped_long').length
@@ -882,18 +900,37 @@ export default function LiveTracking() {
                 <User size={32} color="#CBD5E1" style={{ margin:'0 auto 10px' }}/>
                 <div style={{ fontSize:13, color:T.faint }}>{search?`No results for "${search}"`:'No vehicles found'}</div>
               </div>
-            ) : filter !== 'all' ? list.map(renderRow) : (
-              [['moving','Moving'],['stopped','Stopped'],['stopped_long','Stopped 24h+'],['offline','Offline']].map(([key,label]) => {
-                const group = list.filter(v => dispStatus(v) === key)
-                if (group.length === 0) return null
+            ) : (
+              groupNames.map(gname => {
+                const groupList = list.filter(v => (v.group || 'Ungrouped') === gname)
+                if (groupList.length === 0) return null
+                const collapsed = collapsedGroups.has(gname)
                 return (
-                  <div key={key} style={{ marginBottom:4 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 4px 6px' }}>
-                      <span style={{ width:6, height:6, borderRadius:'50%', background:st(key).dot, flexShrink:0 }}/>
-                      <span style={{ fontSize:10, fontWeight:700, color:T.faint, letterSpacing:.6, textTransform:'uppercase' }}>{label}</span>
-                      <span style={{ fontSize:10, color:T.faint }}>· {group.length}</span>
+                  <div key={gname} style={{ marginBottom:6 }}>
+                    {/* Fleet group/folder header -- click to collapse/expand */}
+                    <div onClick={()=>toggleGroupCollapsed(gname)}
+                      style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 6px', cursor:'pointer', userSelect:'none', borderRadius:8 }}>
+                      {collapsed ? <ChevronRight size={13} color={T.muted}/> : <ChevronDown size={13} color={T.muted}/>}
+                      <Layers size={12} color={T.muted}/>
+                      <span style={{ fontSize:11.5, fontWeight:800, color:T.navy }}>{gname}</span>
+                      <span style={{ fontSize:11, color:T.faint }}>({groupList.length})</span>
                     </div>
-                    {group.map(renderRow)}
+                    {!collapsed && (filter !== 'all' ? groupList.map(renderRow) : (
+                      [['moving','Moving'],['stopped','Stopped'],['stopped_long','Stopped 24h+'],['offline','Offline']].map(([key,label]) => {
+                        const sub = groupList.filter(v => dispStatus(v) === key)
+                        if (sub.length === 0) return null
+                        return (
+                          <div key={key} style={{ marginBottom:4, paddingLeft:6 }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 4px 6px' }}>
+                              <span style={{ width:6, height:6, borderRadius:'50%', background:st(key).dot, flexShrink:0 }}/>
+                              <span style={{ fontSize:10, fontWeight:700, color:T.faint, letterSpacing:.6, textTransform:'uppercase' }}>{label}</span>
+                              <span style={{ fontSize:10, color:T.faint }}>· {sub.length}</span>
+                            </div>
+                            {sub.map(renderRow)}
+                          </div>
+                        )
+                      })
+                    ))}
                   </div>
                 )
               })

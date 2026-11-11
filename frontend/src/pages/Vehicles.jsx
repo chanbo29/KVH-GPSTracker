@@ -19,7 +19,7 @@ const AMBER = '#F2A93B', AMBER_DARK = '#1A1306', AMBER_TINT = '#FEF3E2'
 const BORDER   = '1px solid #E2E8F0'
 const TYPES    = ['Sedan','SUV','Truck','Van','Motorcycle','Bus','Other']
 const PROTOCOLS= ['GT06','TK103','H02','GT02','Other']
-const BLANK    = { name:'', type:'Sedan', plate:'', driver:'', imei:'', sim_number:'', protocol:'GT06' }
+const BLANK    = { name:'', type:'Sedan', plate:'', driver:'', imei:'', sim_number:'', protocol:'GT06', group:'Ungrouped' }
 
 /* ── Status helpers ─────────────────────────────────────── */
 const sColor = s => s==='moving'?G:s==='stopped'?A:'#94A3B8'
@@ -62,9 +62,9 @@ function Field({ label, children }) {
     </div>
   )
 }
-function FInput({ value, onChange, placeholder, type='text', mono }) {
+function FInput({ value, onChange, placeholder, type='text', mono, list }) {
   return (
-    <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+    <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} list={list}
       style={{ width:'100%', padding:'12px 14px', border:'1.5px solid #E2E8F0', borderRadius:11, fontSize:14, color:NAVY, outline:'none', boxSizing:'border-box', background:'#FAFAFA', transition:'border .15s', fontFamily:mono?'monospace':'inherit' }}
       onFocus={e=>{e.target.style.borderColor=B;e.target.style.background='#EFF6FF'}}
       onBlur={e =>{e.target.style.borderColor='#E2E8F0';e.target.style.background='#FAFAFA'}}/>
@@ -230,7 +230,7 @@ export default function Vehicles({ onNavigate }) {
   }, [])
   const openEdit = v   => {
     const dev = devices.find(d=>d.imei===v.imei)
-    setForm({ name:v.name||'', type:v.type||'Sedan', plate:v.plate||'', driver:v.owner||'', imei:v.imei||'', sim_number:dev?.sim_number||'', protocol:dev?.protocol||'GT06' })
+    setForm({ name:v.name||'', type:v.type||'Sedan', plate:v.plate||'', driver:v.owner||'', imei:v.imei||'', sim_number:dev?.sim_number||'', protocol:dev?.protocol||'GT06', group:v.group||'Ungrouped' })
     // Backend looks vehicles up by IMEI, not vehicle_id — but a vehicle with no
     // device attached has no IMEI to look up by, so fall back to its vehicle_id.
     setEditId(v.imei || v.vehicle_id)
@@ -252,7 +252,7 @@ export default function Vehicles({ onNavigate }) {
         // editId is the vehicle's ORIGINAL imei (fixed at openEdit) — used only to address the URL.
         // form.imei may hold a newly-selected device's IMEI if the user changed the assignment;
         // that new value is sent in the body, same as before.
-        await api.vehicles.update(editId, { name:form.name.trim(), type:form.type, plate:form.plate.trim(), owner:form.driver, imei:form.imei })
+        await api.vehicles.update(editId, { name:form.name.trim(), type:form.type, plate:form.plate.trim(), owner:form.driver, imei:form.imei, group:form.group })
         if (form.imei) {
           const dev = devices.find(d=>d.imei===form.imei)
           if (dev) await api.devices.update(dev.device_id, { sim_number:form.sim_number, protocol:form.protocol })
@@ -493,6 +493,12 @@ export default function Vehicles({ onNavigate }) {
                 <Field label="Number Plate *"><FInput value={form.plate} onChange={v=>fld('plate',v)} placeholder="e.g. ភ-1234"/></Field>
                 <Field label="Vehicle Type">
                   <FSelect value={form.type} onChange={v=>fld('type',v)}>{TYPES.map(t=><option key={t}>{t}</option>)}</FSelect>
+                </Field>
+                <Field label="Group">
+                  <FInput value={form.group} onChange={v=>fld('group',v)} placeholder="e.g. Delivery, Staff Cars" list="vehicle-group-suggestions"/>
+                  <datalist id="vehicle-group-suggestions">
+                    {[...new Set((vehicles||[]).map(v=>v.group).filter(Boolean))].map(g=><option key={g} value={g}/>)}
+                  </datalist>
                 </Field>
                 {modal==='edit' && (
                   <div style={{ gridColumn:'1/-1' }}>

@@ -16,6 +16,9 @@ class Vehicle(models.Model):
     notes      = models.TextField(db_column='Notes', default='', blank=True)
     photo      = models.TextField(db_column='Photo', null=True, blank=True)  # base64 data-URL, kept small client-side
     owner = models.CharField(max_length=100, db_column='Owner', default='Unassigned', blank=True)
+    # Free-text fleet group/folder (e.g. "Delivery", "Staff Cars") so vehicles
+    # can be organized in the sidebar the way Traccar groups its objects list.
+    group = models.CharField(max_length=100, db_column='GroupName', default='Ungrouped', blank=True)
     status     = models.CharField(max_length=20,  db_column='Status', default='parked')
     status_since = models.DateTimeField(null=True, blank=True, db_column='StatusSince')
     # Scratch bookkeeping for the receive-gps grace-period logic: the moment
