@@ -321,30 +321,18 @@ export default function LiveTracking() {
   const markers    = useRef({})
   const pulses     = useRef({})
   const infoWins   = useRef({})   // one VehicleLabel overlay per vehicle, always visible
-  const trailLine  = useRef(null) // forward-only route polyline for the selected vehicle
-  const trailPoints= useRef([])   // points accumulated live since selection, not history
-  const selectedRef= useRef(null) // mirrors `selected`'s imei for use inside syncMarkers
+  const trailLines = useRef({})   // one forward-only route polyline per currently-moving vehicle
+  const trailPoints = useRef({})  // accumulated live points per vehicle, keyed by imei
   const vehiclesRef = useRef([])  // latest fleet data, read from map event listeners/timers
   useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
-  useEffect(() => { selectedRef.current = selected?.imei || null }, [selected])
 
-  // Route trail: drawn only for the vehicle you've selected (click a pin or
-  // a list row) -- never for the whole fleet at once. It starts EMPTY the
-  // moment you select a vehicle (no earlier-today history) and is built up
-  // live, point by point, from syncMarkers as new GPS fixes arrive -- so it
-  // only ever shows where that vehicle goes *after* you start watching it.
-  // Cleared instantly on deselect or when you switch to another vehicle.
-  useEffect(() => {
-    if (trailLine.current) { trailLine.current.setMap(null); trailLine.current = null }
-    trailPoints.current = []
-    if (!selected || !gmap.current || !window.google?.maps) return
-    const color = st(dispStatus(selected)).color
-    trailLine.current = new window.google.maps.Polyline({
-      path: [], map: gmap.current,
-      strokeColor: color, strokeOpacity: 0.9, strokeWeight: 4,
-      icons: [{ icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 4, strokeColor: color }, offset: '100%' }],
-    })
-  }, [selected?.imei])
+  // Route trail: every vehicle gets its own trail automatically the instant
+  // it's moving -- no click needed, so it's already there the moment you
+  // open the app. It starts EMPTY the moment a vehicle starts moving (no
+  // earlier history) and is built up live, point by point, in syncMarkers
+  // as fresh GPS fixes arrive. The instant that vehicle stops, its trail is
+  // removed, so the next time it moves it starts a clean new line rather
+  // than reusing an old route.
 
   // When two or more vehicles are close enough together on screen that their
   // always-on labels would collide, don't hide anyone's info — stack the
@@ -429,17 +417,31 @@ export default function LiveTracking() {
         if (movedMeters < JITTER_METERS) { lat = cur.lat(); lng = cur.lng() }
       }
 
-      // Feed the forward-only route trail, only for the vehicle currently
-      // being watched, and only when it's actually moved since the last
-      // point (skip duplicate/near-identical fixes so the line doesn't
-      // accumulate thousands of overlapping points while parked).
-      if (trailLine.current && v.imei === selectedRef.current) {
-        const pts = trailPoints.current
+      // Route trail: automatic for every moving vehicle, no selection
+      // needed. Start a fresh empty line the moment a vehicle begins
+      // moving; feed it live points (skipping near-identical fixes so it
+      // doesn't fill up with overlapping points); remove it the instant
+      // the vehicle stops, so the next move starts a clean new trail.
+      if (isMoving) {
+        if (!trailLines.current[v.imei]) {
+          const color = st('moving').color
+          trailLines.current[v.imei] = new window.google.maps.Polyline({
+            path: [], map: gmap.current,
+            strokeColor: color, strokeOpacity: 0.9, strokeWeight: 4,
+            icons: [{ icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 4, strokeColor: color }, offset: '100%' }],
+          })
+          trailPoints.current[v.imei] = []
+        }
+        const pts = trailPoints.current[v.imei]
         const last = pts[pts.length - 1]
         if (!last || haversineMeters(last.lat, last.lng, lat, lng) >= 5) {
           pts.push({ lat, lng })
-          trailLine.current.setPath(pts)
+          trailLines.current[v.imei].setPath(pts)
         }
+      } else if (trailLines.current[v.imei]) {
+        trailLines.current[v.imei].setMap(null)
+        delete trailLines.current[v.imei]
+        delete trailPoints.current[v.imei]
       }
 
       const icon = mkIcon(dispStatus(v), v.course||0)
