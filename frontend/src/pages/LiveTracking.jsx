@@ -99,14 +99,24 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
 // Arrow-shaped marker icon, rotated to the vehicle's heading via an SVG
 // `transform="rotate(...)"` attribute (works reliably even as a standalone
 // data-URI image, unlike a CSS transform on the root <svg>).
-function mkIcon(status, course = 0) {
+function mkIcon(status, course = 0, type = 'car') {
   const color = st(status).color
-  const size  = status === 'moving' ? 26 : 20
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
-    <g transform="rotate(${course} 12 12)">
-      <path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/>
-    </g>
-  </svg>`
+  const size  = status === 'moving' ? 28 : 22
+  const isMoto = /moto|scooter|bike/i.test(type || '')
+  // Top-down silhouettes so the marker reads as "a car" or "a motorbike"
+  // at a glance, independent of the status color it's painted in.
+  const shape = isMoto
+    ? `<g transform="rotate(${course} 12 12)">
+         <ellipse cx="12" cy="5.5" rx="2.1" ry="2.6" fill="${color}" stroke="white" stroke-width="1.2"/>
+         <path d="M10.2 7.5 L8.7 18 M13.8 7.5 L15.3 18" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+         <ellipse cx="9.2" cy="19.2" rx="2.3" ry="2.3" fill="${color}" stroke="white" stroke-width="1.2"/>
+         <ellipse cx="14.8" cy="19.2" rx="2.3" ry="2.3" fill="${color}" stroke="white" stroke-width="1.2"/>
+       </g>`
+    : `<g transform="rotate(${course} 12 12)">
+         <rect x="6.5" y="2.5" width="11" height="19" rx="3.5" fill="${color}" stroke="white" stroke-width="1.4"/>
+         <rect x="8.2" y="5" width="7.6" height="5" rx="1.2" fill="white" fill-opacity="0.55"/>
+       </g>`
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">${shape}</svg>`
   return {
     url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
     scaledSize: new window.google.maps.Size(size, size),
@@ -470,7 +480,7 @@ export default function LiveTracking() {
         delete trailPoints.current[v.imei]
       }
 
-      const icon = mkIcon(dispStatus(v), v.course||0)
+      const icon = mkIcon(dispStatus(v), v.course||0, v.type)
       if (markers.current[v.imei]) {
         animateMarker(markers.current[v.imei], lat, lng)
         markers.current[v.imei].setIcon(icon)
