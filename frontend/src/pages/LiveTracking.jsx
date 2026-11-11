@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { api } from '../api/client.js'
 import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
+import { MarkerClusterer } from '@googlemaps/markerclusterer'
 
 const T = {
   sidebarBg: '#FFFFFF',
@@ -134,6 +135,35 @@ function mkIcon(status, course = 0, type = 'car') {
     scaledSize: new window.google.maps.Size(size, size),
     anchor: new window.google.maps.Point(size / 2, size / 2),
   }
+}
+
+// Below this zoom level, individual floating labels are hidden since
+// their pins are clustered together anyway.
+const CLUSTER_LABEL_ZOOM = 12
+
+// Zoomed-out cluster badge -- concentric teal rings with the count in the
+// middle, matching the requested reference look. Used by MarkerClusterer
+// in place of its (plain, unstyled) default bubble.
+const clusterRenderer = {
+  render({ count, position }) {
+    const size = count < 10 ? 46 : count < 50 ? 56 : 66
+    const c = '#0EA5B5'
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}"  fill="${c}" fill-opacity="0.22"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 10}" fill="${c}" fill-opacity="0.4"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${size/2 - 17}" fill="${c}" stroke="white" stroke-width="2"/>
+    </svg>`
+    return new window.google.maps.Marker({
+      position,
+      icon: {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new window.google.maps.Size(size, size),
+        anchor: new window.google.maps.Point(size / 2, size / 2),
+      },
+      label: { text: String(count), color: 'white', fontSize: '13px', fontWeight: '700' },
+      zIndex: 1000 + count,
+    })
+  },
 }
 
 // HTML content for the on-map info bubble that floats above a vehicle's pin
@@ -362,6 +392,18 @@ export default function LiveTracking() {
   const [open,     setOpen]     = useState(true)
   const [lastSync, setLastSync] = useState(null)
   const [mapReady, setMapReady] = useState(false)
+  // Current map zoom -- below CLUSTER_LABEL_ZOOM, individual vehicle
+  // labels/pulses are suppressed since their pins are clustered together
+  // anyway (a stack of 31 floating labels over one cluster bubble would
+  // just be noise).
+  const [zoomLevel, setZoomLevel] = useState(13)
+  const zoomLevelRef = useRef(13)
+  useEffect(() => {
+    zoomLevelRef.current = zoomLevel
+    Object.keys(infoWins.current).forEach(imei => {
+      infoWins.current[imei]?.setVisible(zoomLevel >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(imei))
+    })
+  }, [zoomLevel])
   // Which vehicles' floating map labels are checked "on" in the sidebar
   // (Traccar-style multi-select) -- unchecking a vehicle hides its label
   // clutter on the map while leaving its colored pin in place. Empty set
@@ -371,7 +413,7 @@ export default function LiveTracking() {
   useEffect(() => {
     hiddenLabelsRef.current = hiddenLabels
     Object.keys(infoWins.current).forEach(imei => {
-      infoWins.current[imei]?.setVisible(!hiddenLabels.has(imei))
+      infoWins.current[imei]?.setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabels.has(imei))
     })
   }, [hiddenLabels])
   const toggleLabel = (imei) => {
@@ -460,6 +502,7 @@ export default function LiveTracking() {
   const infoWins   = useRef({})   // one VehicleLabel overlay per vehicle, always visible
   const trailLines = useRef({})   // one forward-only route polyline per currently-moving vehicle
   const trailPoints = useRef({})  // accumulated live points per vehicle, keyed by imei
+  const clusterer   = useRef(null) // MarkerClusterer instance -- owns show/hide of every vehicle marker
   const vehiclesRef = useRef([])  // latest fleet data, read from map event listeners/timers
   useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
 
@@ -596,7 +639,10 @@ export default function LiveTracking() {
         animateMarker(markers.current[v.imei], lat, lng)
         markers.current[v.imei].setIcon(icon)
       } else {
-        const m = new window.google.maps.Marker({ position:{lat,lng}, map:gmap.current, icon, title:v.name })
+        // No `map` here -- the clusterer owns showing/hiding this marker
+        // (individually when zoomed in, folded into a cluster badge when
+        // zoomed out) via clusterer.addMarker() below.
+        const m = new window.google.maps.Marker({ position:{lat,lng}, icon, title:v.name })
         m.addListener('click', ()=>{
           const cur = markers.current[v.imei].getPosition()
           setSelected(v)
@@ -604,16 +650,18 @@ export default function LiveTracking() {
           gmap.current.setZoom(16)
         })
         markers.current[v.imei] = m
+        clusterer.current?.addMarker(m)
 
         // Custom floating label, shown automatically as soon as the marker
         // exists — no click needed — gliding smoothly with the pin.
         const LabelCls = getVehicleLabelClass()
         infoWins.current[v.imei] = new LabelCls(gmap.current, { lat, lng }, mkInfoHtml(v), st(dispStatus(v)).color)
-        infoWins.current[v.imei].setVisible(!hiddenLabelsRef.current.has(v.imei))
+        infoWins.current[v.imei].setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(v.imei))
       }
       // Keep the always-visible label in sync with live position/data
       if (infoWins.current[v.imei]) {
         infoWins.current[v.imei].update({ lat, lng }, mkInfoHtml(v))
+        infoWins.current[v.imei].setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(v.imei))
       }
       if (isMoving) {
         if (pulses.current[v.imei]) pulses.current[v.imei].setCenter(lat,lng)
@@ -639,6 +687,9 @@ export default function LiveTracking() {
       ],
     })
     gmap.current = map
+    clusterer.current = new MarkerClusterer({ map, markers: [], renderer: clusterRenderer })
+    map.addListener('zoom_changed', () => setZoomLevel(map.getZoom()))
+    setZoomLevel(map.getZoom())
     setMapReady(true)
   }, [])
 

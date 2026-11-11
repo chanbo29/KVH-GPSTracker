@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@googlemaps/markerclusterer": "^2.6.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.383.0",
     "react": "^18.2.0",
