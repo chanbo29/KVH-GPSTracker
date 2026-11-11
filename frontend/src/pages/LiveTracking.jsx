@@ -53,14 +53,17 @@ function dispStatus(v) {
   return (isFinite(ms) && ms >= STOPPED_LONG_HOURS * 3600000) ? 'stopped_long' : 'stopped'
 }
 
-// "Stopped 23m" / "Stopped 1h 12m" / "Stopped 2d 4h" — how long the vehicle
-// has held its current status, from Vehicle.status_since.
+// "Stopped 7s" / "Stopped 23m" / "Stopped 1h 12m" / "Stopped 2d 4h" — how
+// long the vehicle has held its current status, from Vehicle.status_since.
+// Real seconds under a minute (not a vague "<1m") so it visibly ticks up
+// live, second by second, right after a vehicle stops.
 function sinceLabel(iso) {
   if (!iso) return ''
   const ms = Date.now() - new Date(iso).getTime()
   if (!isFinite(ms) || ms < 0) return ''
-  const mins = Math.floor(ms / 60000)
-  if (mins < 1) return '<1m'
+  const secs = Math.floor(ms / 1000)
+  if (secs < 60) return `${secs}s`
+  const mins = Math.floor(secs / 60)
   if (mins < 60) return `${mins}m`
   const hrs = Math.floor(mins / 60)
   if (hrs < 24) return `${hrs}h ${mins % 60}m`
@@ -267,6 +270,12 @@ function getVehicleLabelClass() {
       }
       this.draw()
     }
+    // Lightweight text-only refresh for the once-a-second "stopped Xs" tick
+    // -- unlike update(), doesn't touch position or restart the move
+    // transition, since nothing but the duration text actually changed.
+    retext(html) {
+      if (this.card) this.card.innerHTML = html
+    }
     onRemove() {
       clearTimeout(this._transTimer)
       if (this.div?.parentNode) this.div.parentNode.removeChild(this.div)
@@ -315,6 +324,13 @@ export default function LiveTracking() {
   const [open,     setOpen]     = useState(true)
   const [lastSync, setLastSync] = useState(null)
   const [mapReady, setMapReady] = useState(false)
+  // Ticks once a second so every on-screen "stopped Xs"/"moving Xs" duration
+  // visibly counts up in real time, independent of the 5s data-poll cycle.
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
 
   const mapRef     = useRef(null)
   const gmap       = useRef(null)
@@ -325,6 +341,16 @@ export default function LiveTracking() {
   const trailPoints = useRef({})  // accumulated live points per vehicle, keyed by imei
   const vehiclesRef = useRef([])  // latest fleet data, read from map event listeners/timers
   useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
+
+  // Re-stamp every floating label's text once a second so a stopped/offline
+  // vehicle's "Xs"/"Xm" duration visibly ticks up live, without waiting for
+  // the next 5s GPS poll and without re-animating the pin's position.
+  useEffect(() => {
+    vehiclesRef.current.forEach(v => {
+      const win = infoWins.current[v.imei]
+      if (win) win.retext(mkInfoHtml(v))
+    })
+  }, [tick])
 
   // Route trail: every vehicle gets its own trail automatically the instant
   // it's moving -- no click needed, so it's already there the moment you
