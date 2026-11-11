@@ -75,21 +75,37 @@ class VehicleSerializer(serializers.ModelSerializer):
 
     def get_last_update(self, obj):
         log = obj.latest_log
-        return log.timestamp.strftime('%H:%M:%S') if log else None
+        return log.timestamp.isoformat() if log else None
 
     def get_status_since(self, obj):
+        log = obj.latest_log
+        if log and (timezone.now() - log.timestamp) > datetime.timedelta(minutes=OFFLINE_TIMEOUT_MINUTES):
+            # Stale -- the stored status_since may be from a much older
+            # transition, or never set at all (e.g. a device that dropped
+            # off network mid-drive, never reaching the stopped grace
+            # period). For display, "how long has this been stopped/
+            # silent" reads better measured from the last GPS ping itself.
+            return log.timestamp.isoformat()
         return obj.status_since.isoformat() if obj.status_since else None
 
     def get_live_status(self, obj):
-        # Authoritative status for display: 'offline' overrides whatever
-        # moving/stopped value is stored, if nothing has been heard from
-        # this vehicle's GPS device recently.
+        # Authoritative status for display. A vehicle that has never sent a
+        # single GPS fix is 'offline' (grey). Otherwise, once its last fix
+        # is older than OFFLINE_TIMEOUT_MINUTES we stop trusting the stored
+        # moving/stopped value (a device that lost power mid-drive would
+        # otherwise show as permanently 'moving' forever) and instead color
+        # it purely by how long it's actually been silent: amber up to 24h,
+        # escalating to red beyond that -- no separate dead-grey tier for
+        # merely being stale.
         log = obj.latest_log
         if not log:
             return 'offline'
-        if timezone.now() - log.timestamp > datetime.timedelta(minutes=OFFLINE_TIMEOUT_MINUTES):
-            return 'offline'
-        return obj.status
+        elapsed = timezone.now() - log.timestamp
+        if elapsed <= datetime.timedelta(minutes=OFFLINE_TIMEOUT_MINUTES):
+            return obj.status
+        if elapsed >= datetime.timedelta(hours=24):
+            return 'stopped_long'
+        return 'stopped'
 
 
 class ReceiveGPSSerializer(serializers.Serializer):

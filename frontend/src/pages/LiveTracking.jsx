@@ -34,23 +34,16 @@ const STATUS = {
 }
 const st = s => STATUS[s] || STATUS.offline
 
-// How long a "stopped" vehicle has to have held that status before its
-// color escalates from yellow to red -- a quick roadside stop looks very
-// different from a vehicle that's been sitting for over a day.
-const STOPPED_LONG_HOURS = 24
-
 // The single color-coded status key every part of this page uses for
-// display: green while actually moving, grey the moment the backend has no
-// recent ping (live_status, computed server-side from GPS freshness --
+// display. The backend's live_status is authoritative for all four tiers:
+// green while actually moving, grey only for a vehicle that has never sent
+// a single GPS fix, amber for a recent stop or a brief silence, escalating
+// to red once that stop/silence has lasted 24h+ (both computed server-side
+// in VehicleSerializer.get_live_status, from actual GPS freshness --
 // falls back to the raw `status` field for any older API response that
-// doesn't have it yet), amber for a recent stop, escalating to red once
-// that stop has lasted STOPPED_LONG_HOURS or more.
+// doesn't have live_status yet).
 function dispStatus(v) {
-  const live = v.live_status || v.status
-  if (live === 'offline') return 'offline'
-  if (live === 'moving')  return 'moving'
-  const ms = v.status_since ? Date.now() - new Date(v.status_since).getTime() : 0
-  return (isFinite(ms) && ms >= STOPPED_LONG_HOURS * 3600000) ? 'stopped_long' : 'stopped'
+  return v.live_status || v.status || 'offline'
 }
 
 // "Stopped 7s" / "Stopped 23m" / "Stopped 1h 12m" / "Stopped 2d 4h" — how
@@ -1117,11 +1110,13 @@ export default function LiveTracking() {
                   {/* Address / Time / Stop duration -- Traccar-style detail rows */}
                   {selected.lat && parseFloat(selected.lat) !== 0 ? (
                     <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                      <div style={{ display:'flex', alignItems:'flex-start', gap:9, padding:'9px 12px', background:T.blueL, borderRadius:10, border:`1px solid ${T.blue}22` }}>
+                      <div onClick={()=>window.open(`https://www.google.com/maps/search/?api=1&query=${selected.lat},${selected.lng}`, '_blank', 'noopener')}
+                        title="Open in Google Maps"
+                        style={{ display:'flex', alignItems:'flex-start', gap:9, padding:'9px 12px', background:T.blueL, borderRadius:10, border:`1px solid ${T.blue}22`, cursor:'pointer' }}>
                         <MapPin size={13} color={T.blue} style={{ marginTop:2, flexShrink:0 }}/>
                         <div style={{ minWidth:0 }}>
                           <div style={{ fontSize:9, fontWeight:700, color:T.blue, textTransform:'uppercase', letterSpacing:.4, marginBottom:2 }}>Address</div>
-                          <div style={{ fontSize:12.5, color:T.navy, fontWeight:600 }}>
+                          <div style={{ fontSize:12.5, color:T.navy, fontWeight:600, textDecoration:'underline', textDecorationColor:`${T.blue}55` }}>
                             {selAddress || `${Number(selected.lat).toFixed(6)}, ${Number(selected.lng).toFixed(6)}`}
                           </div>
                         </div>
