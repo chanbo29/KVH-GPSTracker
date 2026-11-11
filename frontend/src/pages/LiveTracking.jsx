@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Car, Navigation, Wifi, WifiOff, Battery, Gauge,
   MapPin, X, RefreshCw, Users, Search,
-  ChevronLeft, ChevronRight, User, Layers,
+  ChevronLeft, ChevronRight, User, Layers, Clock,
 } from 'lucide-react'
 import { api } from '../api/client.js'
 import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
@@ -94,6 +94,33 @@ function haversineMeters(lat1, lng1, lat2, lng2) {
   const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1)
   const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2
   return 2 * R * Math.asin(Math.sqrt(a))
+}
+
+// Reverse geocoding: turns a vehicle's raw lat/lng into a short human
+// address ("Street, City") using the same Google Maps JS API already
+// loaded for the map, via its client-side Geocoder. Cached by a coarse
+// (~11m) rounding of the coordinates so a stationary vehicle's tiny GPS
+// jitter doesn't trigger a fresh lookup on every poll.
+const geocodeCache = {}
+function reverseGeocode(lat, lng, cb) {
+  if (lat == null || lng == null || !window.google?.maps?.Geocoder) return
+  const key = `${(+lat).toFixed(4)},${(+lng).toFixed(4)}`
+  if (geocodeCache[key]) { cb(geocodeCache[key]); return }
+  if (geocodeCache[key] === null) return // lookup already in flight / failed, don't hammer it
+  geocodeCache[key] = null
+  const geocoder = new window.google.maps.Geocoder()
+  geocoder.geocode({ location: { lat: +lat, lng: +lng } }, (results, status) => {
+    if (status === 'OK' && results?.[0]) {
+      // Prefer a short, human result over the full formatted address --
+      // skip the "plus code"/plain country-only results Google sometimes
+      // returns first.
+      const best = results.find(r => !/^[A-Z0-9]{4,}\+[A-Z0-9]{2,}/.test(r.formatted_address)) || results[0]
+      geocodeCache[key] = best.formatted_address
+      cb(best.formatted_address)
+    } else {
+      delete geocodeCache[key]
+    }
+  })
 }
 
 // Arrow-shaped marker icon, rotated to the vehicle's heading via an SVG
@@ -337,6 +364,17 @@ function makePulse(map, lat, lng) {
 export default function LiveTracking() {
   const [vehicles, setVehicles] = useState([])
   const [selected, setSelected] = useState(null)
+  // Reverse-geocoded address for whichever vehicle is selected -- re-looked
+  // up only when its (rounded) position actually changes, not on every 5s
+  // poll, to keep from spamming the Geocoder API.
+  const [selAddress, setSelAddress] = useState('')
+  useEffect(() => {
+    if (!selected?.lat || !selected?.lng || parseFloat(selected.lat) === 0) {
+      setSelAddress('')
+      return
+    }
+    reverseGeocode(selected.lat, selected.lng, addr => setSelAddress(addr))
+  }, [selected?.imei, selected?.lat && (+selected.lat).toFixed(4), selected?.lng && (+selected.lng).toFixed(4)])
   const [search,   setSearch]   = useState('')
   const [filter,   setFilter]   = useState('all')
   const [loading,  setLoading]  = useState(true)
@@ -985,11 +1023,38 @@ export default function LiveTracking() {
                     </div>
                   </div>
 
-                  {/* Coordinates */}
+                  {/* Address / Time / Stop duration -- Traccar-style detail rows */}
                   {selected.lat && parseFloat(selected.lat) !== 0 ? (
-                    <div style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 12px', background:T.blueL, borderRadius:10, border:`1px solid ${T.blue}22` }}>
-                      <MapPin size={13} color={T.blue}/>
-                      <span style={{ fontFamily:'monospace', fontSize:12, color:T.blue, fontWeight:600 }}>{Number(selected.lat).toFixed(6)}, {Number(selected.lng).toFixed(6)}</span>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      <div style={{ display:'flex', alignItems:'flex-start', gap:9, padding:'9px 12px', background:T.blueL, borderRadius:10, border:`1px solid ${T.blue}22` }}>
+                        <MapPin size={13} color={T.blue} style={{ marginTop:2, flexShrink:0 }}/>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontSize:9, fontWeight:700, color:T.blue, textTransform:'uppercase', letterSpacing:.4, marginBottom:2 }}>Address</div>
+                          <div style={{ fontSize:12.5, color:T.navy, fontWeight:600 }}>
+                            {selAddress || `${Number(selected.lat).toFixed(6)}, ${Number(selected.lng).toFixed(6)}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 12px', background:T.bg, borderRadius:10, border:'1px solid '+T.border }}>
+                        <Clock size={13} color={T.muted} style={{ flexShrink:0 }}/>
+                        <div style={{ minWidth:0 }}>
+                          <div style={{ fontSize:9, fontWeight:700, color:T.muted, textTransform:'uppercase', letterSpacing:.4, marginBottom:2 }}>Time</div>
+                          <div style={{ fontSize:12.5, color:T.navy, fontWeight:600 }}>
+                            {selected.last_update ? new Date(selected.last_update).toLocaleString() : '—'}
+                          </div>
+                        </div>
+                      </div>
+                      {selDs !== 'moving' && (
+                        <div style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 12px', background:s.bg, borderRadius:10, border:`1px solid ${s.color}33` }}>
+                          <Navigation size={13} color={s.color} style={{ flexShrink:0 }}/>
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:9, fontWeight:700, color:s.color, textTransform:'uppercase', letterSpacing:.4, marginBottom:2 }}>Stop duration</div>
+                            <div style={{ fontSize:12.5, color:s.color, fontWeight:700 }}>
+                              {sinceLabel(selected.status_since) || '—'}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 12px', background:T.amberL, borderRadius:10, border:`1px solid ${T.amber}33` }}>
