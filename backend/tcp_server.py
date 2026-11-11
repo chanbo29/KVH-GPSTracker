@@ -17,7 +17,14 @@ HOST     = '0.0.0.0'
 # Don't change this port without re-sending that SMS to every tracker.
 PORT     = 443
 API_BASE = 'http://127.0.0.1:8000/api'
-TIMEOUT  = 120   # seconds before idle connection closes
+# 2026-11-11: both test devices were sending exactly ONE heartbeat per
+# connection then nothing else, getting cut by this timeout at ~120s, then
+# immediately reconnecting -- forever repeating, never once reaching a
+# second heartbeat or a GPS fix. That strongly suggests this device's real
+# report interval is longer than 120s and resets on every fresh TCP
+# connection, so the old timeout was killing it just before it could ever
+# send real data. Extended well past that so it gets a real chance.
+TIMEOUT  = 600   # seconds before idle connection closes
 
 # ── CRC-16/X-25 (what GT06 actually uses — reflected poly 0x1021,
 #    i.e. 0x8408 bit-reversed, with inverted output). The earlier
