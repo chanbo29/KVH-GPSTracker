@@ -417,7 +417,7 @@ export default function LiveTracking() {
   useEffect(() => {
     zoomLevelRef.current = zoomLevel
     Object.keys(infoWins.current).forEach(imei => {
-      infoWins.current[imei]?.setVisible(zoomLevel >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(imei))
+      infoWins.current[imei]?.setVisible(zoomLevel >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(imei) && !prevGrouped.current.has(imei))
     })
   }, [zoomLevel])
   // Which vehicles' floating map labels are checked "on" in the sidebar
@@ -429,7 +429,7 @@ export default function LiveTracking() {
   useEffect(() => {
     hiddenLabelsRef.current = hiddenLabels
     Object.keys(infoWins.current).forEach(imei => {
-      infoWins.current[imei]?.setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabels.has(imei))
+      infoWins.current[imei]?.setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabels.has(imei) && !prevGrouped.current.has(imei))
     })
   }, [hiddenLabels])
   const toggleLabel = (imei) => {
@@ -699,12 +699,12 @@ export default function LiveTracking() {
         // exists — no click needed — gliding smoothly with the pin.
         const LabelCls = getVehicleLabelClass()
         infoWins.current[v.imei] = new LabelCls(gmap.current, { lat, lng }, mkInfoHtml(v), st(dispStatus(v)).color)
-        infoWins.current[v.imei].setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(v.imei))
+        infoWins.current[v.imei].setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(v.imei) && !prevGrouped.current.has(v.imei))
       }
       // Keep the always-visible label in sync with live position/data
       if (infoWins.current[v.imei]) {
         infoWins.current[v.imei].update({ lat, lng }, mkInfoHtml(v))
-        infoWins.current[v.imei].setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(v.imei))
+        infoWins.current[v.imei].setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(v.imei) && !prevGrouped.current.has(v.imei))
       }
       if (isMoving) {
         if (pulses.current[v.imei]) pulses.current[v.imei].setCenter(lat,lng)
@@ -755,6 +755,9 @@ export default function LiveTracking() {
         }
       })
       prevGrouped.current = nowGrouped
+      Object.keys(infoWins.current).forEach(imei => {
+        infoWins.current[imei]?.setVisible(zoomLevelRef.current >= CLUSTER_LABEL_ZOOM && !hiddenLabelsRef.current.has(imei) && !nowGrouped.has(imei))
+      })
     })
     map.addListener('zoom_changed', () => setZoomLevel(map.getZoom()))
     setZoomLevel(map.getZoom())
