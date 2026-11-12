@@ -727,7 +727,7 @@ export default function LiveTracking() {
       ],
     })
     gmap.current = map
-    clusterer.current = new MarkerClusterer({ map, markers: [], renderer: clusterRenderer, algorithm: new SuperClusterAlgorithm({ radius: 120, maxZoom: 16 }) })
+    clusterer.current = new MarkerClusterer({ map, markers: [], renderer: clusterRenderer, algorithm: new SuperClusterAlgorithm({ radius: 220, maxZoom: 17 }) })
     map.addListener('zoom_changed', () => setZoomLevel(map.getZoom()))
     setZoomLevel(map.getZoom())
     setMapReady(true)
