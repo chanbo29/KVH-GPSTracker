@@ -70,8 +70,15 @@ class VehicleSerializer(serializers.ModelSerializer):
         return float(log.longitude) if log else None
 
     def get_speed(self, obj):
+        # Show 0 once the vehicle isn't actually considered 'moving' --
+        # otherwise a vehicle that was last seen doing 13km/h, then went
+        # quiet, keeps displaying that stale non-zero speed forever even
+        # though live_status has already reclassified it as stopped/
+        # stopped_long/offline.
         log = obj.latest_log
-        return log.speed if log else 0
+        if not log:
+            return 0
+        return log.speed if self._live_status(obj) == 'moving' else 0
 
     def get_last_update(self, obj):
         log = obj.latest_log
@@ -88,7 +95,7 @@ class VehicleSerializer(serializers.ModelSerializer):
             return log.timestamp.isoformat()
         return obj.status_since.isoformat() if obj.status_since else None
 
-    def get_live_status(self, obj):
+    def _live_status(self, obj):
         # Authoritative status for display. A vehicle that has never sent a
         # single GPS fix is 'offline' (grey). Otherwise, once its last fix
         # is older than OFFLINE_TIMEOUT_MINUTES we stop trusting the stored
@@ -106,6 +113,9 @@ class VehicleSerializer(serializers.ModelSerializer):
         if elapsed >= datetime.timedelta(hours=24):
             return 'stopped_long'
         return 'stopped'
+
+    def get_live_status(self, obj):
+        return self._live_status(obj)
 
 
 class ReceiveGPSSerializer(serializers.Serializer):
