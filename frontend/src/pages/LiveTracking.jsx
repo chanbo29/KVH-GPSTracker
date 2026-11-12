@@ -165,7 +165,8 @@ const clusterRenderer = {
         <animate attributeName="fill-opacity" values="0.4;0.15;0.4" dur="2.6s" begin="0.3s" repeatCount="indefinite"/>
       </circle>
       <circle cx="${size/2}" cy="${size/2}" r="${rCore}" fill="${c}" stroke="white" stroke-width="2.5">
-        <animate attributeName="r" values="${rCore};${rCore*1.06};${rCore}" dur="2.6s" repeatCount="indefinite"/>
+        <animate attributeName="r" values="0;${rCore*1.15};${rCore}" dur="0.32s" fill="freeze"/>
+        <animate attributeName="r" values="${rCore};${rCore*1.06};${rCore}" dur="2.6s" begin="0.32s" repeatCount="indefinite"/>
       </circle>
     </svg>`
     return new window.google.maps.Marker({
@@ -738,12 +739,18 @@ export default function LiveTracking() {
       mc.clusters.forEach(c => {
         if (c.count > 1) c.markers.forEach(m => { if (m.__imei) nowGrouped.add(m.__imei) })
       })
+      let dropIndex = 0
       prevGrouped.current.forEach(imei => {
         if (!nowGrouped.has(imei)) {
           const m = markers.current[imei]
           if (m && window.google?.maps?.Animation) {
-            m.setAnimation(window.google.maps.Animation.DROP)
-            setTimeout(() => { if (markers.current[imei] === m) m.setAnimation(null) }, 700)
+            const delay = dropIndex * 80
+            dropIndex++
+            setTimeout(() => {
+              if (markers.current[imei] !== m) return
+              m.setAnimation(window.google.maps.Animation.DROP)
+              setTimeout(() => { if (markers.current[imei] === m) m.setAnimation(null) }, 700)
+            }, delay)
           }
         }
       })
