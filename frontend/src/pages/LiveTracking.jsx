@@ -7,6 +7,7 @@ import {
 import { api } from '../api/client.js'
 import { loadGoogleMaps } from '../lib/googleMapsLoader.js'
 import { MarkerClusterer } from '@googlemaps/markerclusterer'
+import { SuperClusterAlgorithm } from '@googlemaps/markerclusterer'
 
 const T = {
   sidebarBg: '#FFFFFF',
@@ -726,7 +727,7 @@ export default function LiveTracking() {
       ],
     })
     gmap.current = map
-    clusterer.current = new MarkerClusterer({ map, markers: [], renderer: clusterRenderer })
+    clusterer.current = new MarkerClusterer({ map, markers: [], renderer: clusterRenderer, algorithm: new SuperClusterAlgorithm({ radius: 120, maxZoom: 16 }) })
     map.addListener('zoom_changed', () => setZoomLevel(map.getZoom()))
     setZoomLevel(map.getZoom())
     setMapReady(true)
