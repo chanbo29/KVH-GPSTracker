@@ -730,7 +730,7 @@ export default function LiveTracking() {
       ],
     })
     gmap.current = map
-    clusterer.current = new MarkerClusterer({ map, markers: [], renderer: clusterRenderer, algorithm: new SuperClusterAlgorithm({ radius: 220, maxZoom: 17 }) })
+    clusterer.current = new MarkerClusterer({ map, markers: [], renderer: clusterRenderer, algorithm: new SuperClusterAlgorithm({ radius: 90, maxZoom: 14 }) })
     // When zooming in splits a cluster badge back into its individual
     // vehicles, give each newly-revealed marker a quick "drop" motion so
     // it reads as popping out of the group instead of just appearing.
