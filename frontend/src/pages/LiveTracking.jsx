@@ -543,6 +543,7 @@ export default function LiveTracking() {
   const trailLines = useRef({})   // one forward-only route polyline per currently-moving vehicle
   const trailPoints = useRef({})  // accumulated live points per vehicle, keyed by imei
   const clusterer   = useRef(null) // MarkerClusterer instance -- owns show/hide of every vehicle marker
+  const prevGrouped = useRef(new Set()) // imeis that were folded into a cluster badge as of the last redraw -- used to animate a vehicle "dropping out" the moment it un-clusters
   const vehiclesRef = useRef([])  // latest fleet data, read from map event listeners/timers
   useEffect(() => { vehiclesRef.current = vehicles }, [vehicles])
 
@@ -683,6 +684,7 @@ export default function LiveTracking() {
         // (individually when zoomed in, folded into a cluster badge when
         // zoomed out) via clusterer.addMarker() below.
         const m = new window.google.maps.Marker({ position:{lat,lng}, icon, title:v.name })
+        m.__imei = v.imei
         m.addListener('click', ()=>{
           const cur = markers.current[v.imei].getPosition()
           setSelected(v)
@@ -728,6 +730,25 @@ export default function LiveTracking() {
     })
     gmap.current = map
     clusterer.current = new MarkerClusterer({ map, markers: [], renderer: clusterRenderer, algorithm: new SuperClusterAlgorithm({ radius: 220, maxZoom: 17 }) })
+    // When zooming in splits a cluster badge back into its individual
+    // vehicles, give each newly-revealed marker a quick "drop" motion so
+    // it reads as popping out of the group instead of just appearing.
+    clusterer.current.addListener('clusteringend', (mc) => {
+      const nowGrouped = new Set()
+      mc.clusters.forEach(c => {
+        if (c.count > 1) c.markers.forEach(m => { if (m.__imei) nowGrouped.add(m.__imei) })
+      })
+      prevGrouped.current.forEach(imei => {
+        if (!nowGrouped.has(imei)) {
+          const m = markers.current[imei]
+          if (m && window.google?.maps?.Animation) {
+            m.setAnimation(window.google.maps.Animation.DROP)
+            setTimeout(() => { if (markers.current[imei] === m) m.setAnimation(null) }, 700)
+          }
+        }
+      })
+      prevGrouped.current = nowGrouped
+    })
     map.addListener('zoom_changed', () => setZoomLevel(map.getZoom()))
     setZoomLevel(map.getZoom())
     setMapReady(true)
