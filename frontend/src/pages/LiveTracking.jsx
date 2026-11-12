@@ -690,7 +690,7 @@ export default function LiveTracking() {
           const cur = markers.current[v.imei].getPosition()
           setSelected(v)
           gmap.current.panTo({ lat: cur.lat(), lng: cur.lng() })
-          gmap.current.setZoom(16)
+          gmap.current.setZoom(18)
         })
         markers.current[v.imei] = m
         clusterer.current?.addMarker(m)
@@ -799,7 +799,7 @@ export default function LiveTracking() {
     setSelected(v)
     if(gmap.current&&v.lat&&parseFloat(v.lat)!==0){
       gmap.current.panTo({ lat:parseFloat(v.lat), lng:parseFloat(v.lng) })
-      gmap.current.setZoom(16)
+      gmap.current.setZoom(18)
     }
   }
 
@@ -811,7 +811,7 @@ export default function LiveTracking() {
     if (withFix.length === 0) return
     if (withFix.length === 1) {
       gmap.current.panTo({ lat:parseFloat(withFix[0].lat), lng:parseFloat(withFix[0].lng) })
-      gmap.current.setZoom(16)
+      gmap.current.setZoom(18)
       return
     }
     const bounds = new window.google.maps.LatLngBounds()
